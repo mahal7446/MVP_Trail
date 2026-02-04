@@ -1,97 +1,63 @@
-# Welcome to your Lovable project
+# Agri MVP Trail 🌱
 
-## Project info
+Agri MVP Trail is a full-stack web application designed as an MVP (Minimum Viable Product) for agriculture-related use cases.  
+The project focuses on building a modern, responsive frontend with a scalable structure and deploying it using cloud platforms.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+This project is part of my learning journey in **full-stack development** and **real-world project deployment**.
 
-## How can I edit this code?
+---
 
-There are several ways of editing your application.
+## 🚀 Live Demo
 
-**Use Lovable**
+You can access the deployed application here:
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+👉 https://agri-mvp-trail.vercel.app/
 
-Changes made via Lovable will be committed automatically to this repo.
+(Deployed using **Vercel**)
 
-**Use your preferred IDE**
+---
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+## 📌 Key Features
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+- Responsive and interactive UI
+- Modern frontend tooling with fast builds
+- Clean project structure suitable for scaling
+- Ready for backend and AI/ML integration
+- Cloud deployment for real-time access
 
-Follow these steps:
+---
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+## 🛠️ Tech Stack
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
-
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
+### Frontend
 - React
-- shadcn-ui
+- TypeScript
+- Vite
 - Tailwind CSS
-- Flask (Python backend for ML model)
-- TensorFlow/Keras (ML model inference)
 
-## ML Model Integration
+### Backend
+- Node / API-ready backend structure (extensible)
 
-This application includes a backend server for running machine learning models (.h5 format).
+### Tools & Deployment
+- Git & GitHub
+- Vercel (deployment)
+- npm
 
-**Quick Start:**
+---
 
-1. **Backend Setup:**
-   ```bash
-   cd backend
-   pip install -r requirements.txt
-   # Place your model.h5 file in backend/models/
-   python app.py
-   ```
+## 📂 Project Structure
 
-2. **Frontend Setup:**
-   ```bash
-   npm install
-   npm run dev
-   ```
-
-For detailed integration instructions, see [INTEGRATION.md](./INTEGRATION.md).
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+```text
+Agri-Trail/
+│
+├── public/                # Static assets
+├── src/                   # React source code
+│   ├── components/        # Reusable UI components
+│   ├── pages/             # Application pages
+│   └── main.tsx           # Entry point
+│
+├── backend/               # Backend / API (future expansion)
+├── .gitignore             # Git ignored files
+├── package.json           # Project dependencies
+├── vite.config.ts         # Vite configuration
+└── README.md              # Project documentation
