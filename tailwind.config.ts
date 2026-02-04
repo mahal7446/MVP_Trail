@@ -2,7 +2,12 @@ import type { Config } from "tailwindcss";
 
 export default {
   darkMode: ["class"],
-  content: ["./pages/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./app/**/*.{ts,tsx}", "./src/**/*.{ts,tsx}"],
+  content: [
+    "./pages/**/*.{js,jsx,ts,tsx}",
+    "./components/**/*.{js,jsx,ts,tsx}",
+    "./app/**/*.{js,jsx,ts,tsx}",
+    "./src/**/*.{js,jsx,ts,tsx}"
+  ],
   prefix: "",
   theme: {
     container: {
@@ -13,7 +18,17 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        sans: ["Inter", "sans-serif"],
+      },
       colors: {
+        // Landing page colors
+        'agri-dark': '#0f3d2e',
+        'agri-green': '#22c55e',
+        'agri-green-light': '#4ade80',
+        'agri-muted': '#d1fae5',
+        'agri-button-dark': '#052e1c',
+        // Existing colors
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
@@ -75,8 +90,9 @@ export default {
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
-      fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+      backgroundImage: {
+        'agri-gradient': 'linear-gradient(135deg, #0f3d2e, #145a3a)',
+        'gradient-earth': 'linear-gradient(135deg, hsl(var(--earth-brown) / 0.05), hsl(var(--leaf-green) / 0.05))',
       },
       keyframes: {
         "accordion-down": {
