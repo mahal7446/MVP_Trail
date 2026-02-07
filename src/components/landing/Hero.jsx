@@ -1,41 +1,14 @@
-import { motion } from 'framer-motion';
 import FloatingBubbles from './FloatingBubbles';
 import WaveDivider from './WaveDivider';
 
 export default function Hero({ onGetStarted }) {
-  const fadeInUp = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0 }
-  };
-
-  const fadeInDown = {
-    hidden: { opacity: 0, y: -20 },
-    visible: { opacity: 1, y: 0 }
-  };
-
-  const fadeInLeft = {
-    hidden: { opacity: 0, x: -50 },
-    visible: { opacity: 1, x: 0 }
-  };
-
-  const scaleIn = {
-    hidden: { opacity: 0, scale: 0.8 },
-    visible: { opacity: 1, scale: 1 }
-  };
-
   return (
-    <section id="about" className="relative min-h-screen flex items-center pt-[72px] overflow-visible pb-20">
+    <section className="relative min-h-screen bg-agri-gradient flex items-center pt-[72px] overflow-visible pb-20">
       <FloatingBubbles />
       <div className="container mx-auto px-6 w-full relative z-10">
         <div className="max-w-3xl">
           {/* Badge */}
-          <motion.div
-            initial="hidden"
-            animate="visible"
-            variants={fadeInDown}
-            transition={{ duration: 0.6, delay: 0.2 }}
-            className="inline-flex items-center space-x-2 bg-green-900 bg-opacity-40 px-4 py-2 rounded-full mb-8 border border-agri-green-light border-opacity-30"
-          >
+          <div className="inline-flex items-center space-x-2 bg-green-900 bg-opacity-40 px-4 py-2 rounded-full mb-8 border border-agri-green-light border-opacity-30">
             <svg
               className="w-4 h-4 text-agri-green"
               fill="currentColor"
@@ -46,73 +19,34 @@ export default function Hero({ onGetStarted }) {
             <span className="text-sm font-medium text-agri-muted">
               AI-Powered Plant Disease Detection
             </span>
-          </motion.div>
+          </div>
 
           {/* Headline */}
-          <motion.h1
-            initial="hidden"
-            animate="visible"
-            variants={fadeInLeft}
-            transition={{ duration: 0.8, delay: 0.4 }}
-            className="text-5xl md:text-6xl font-bold leading-tight mb-6 text-white"
-          >
+          <h1 className="text-5xl md:text-6xl font-bold leading-tight mb-6 text-white">
             Cultivating the<br />
             Future with{' '}
             <span className="text-agri-green">AI-Powered</span>
             <br />
             <span className="text-agri-green">Agriculture</span>
-          </motion.h1>
+          </h1>
 
           {/* Description */}
-          <motion.p
-            initial="hidden"
-            animate="visible"
-            variants={fadeInUp}
-            transition={{ duration: 0.6, delay: 0.6 }}
-            className="text-lg text-agri-muted mb-8 max-w-2xl leading-relaxed"
-          >
+          <p className="text-lg text-agri-muted mb-8 max-w-2xl leading-relaxed">
             Fast, free, and smart crop problem solver — just snap a pic
-          </motion.p>
+          </p>
 
           {/* Buttons */}
-          <motion.div
-            initial="hidden"
-            animate="visible"
-            variants={{
-              hidden: {},
-              visible: {
-                transition: {
-                  staggerChildren: 0.2,
-                  delayChildren: 0.8
-                }
-              }
-            }}
-            className="flex flex-col sm:flex-row gap-4"
-          >
-            <motion.button
-              variants={scaleIn}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+          <div className="flex flex-col sm:flex-row gap-4">
+            <button
               onClick={onGetStarted}
               className="px-8 py-3 bg-agri-green text-agri-button-dark font-semibold rounded-full hover:bg-agri-green-light transition-all duration-300 shadow-lg hover:shadow-xl"
             >
               Getting Started
-            </motion.button>
-            <motion.button
-              variants={scaleIn}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => {
-                const element = document.getElementById('how-it-works');
-                if (element) {
-                  element.scrollIntoView({ behavior: 'smooth' });
-                }
-              }}
-              className="px-8 py-3 border-2 border-agri-green-light text-white font-semibold rounded-full hover:bg-agri-green-light hover:text-agri-button-dark transition-all duration-300"
-            >
+            </button>
+            <button className="px-8 py-3 border-2 border-agri-green-light text-white font-semibold rounded-full hover:bg-agri-green-light hover:text-agri-button-dark transition-all duration-300">
               See How It Works
-            </motion.button>
-          </motion.div>
+            </button>
+          </div>
         </div>
       </div>
 

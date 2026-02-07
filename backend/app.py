@@ -9,6 +9,7 @@ import io
 import tensorflow as tf
 from tensorflow import keras
 import os
+from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
 from database import (
     init_db, create_user, get_user, verify_password, 
@@ -18,6 +19,10 @@ from database import (
 from model_manager import get_model_manager
 from verification_tokens import token_manager
 from email_service import EmailService
+from chat_service import get_chat_service
+
+# Load environment variables from .env file
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for React frontend
@@ -664,6 +669,86 @@ def submit_alert():
 def serve_alert_image(filename):
     """Serve uploaded alert images"""
     return send_from_directory(ALERT_IMAGES_FOLDER, filename)
+
+# ============== CHAT API ENDPOINTS ==============
+
+@app.route('/api/chat', methods=['POST'])
+def chat():
+    """
+    AI chatbot endpoint for agricultural assistance
+    Provides context-aware advice based on disease detection
+    """
+    try:
+        data = request.json
+        user_message = data.get('message')
+        language = data.get('language', 'en')
+        context = data.get('context', {})
+        
+        # Validate input
+        if not user_message:
+            return jsonify({"error": "Message is required"}), 400
+        
+        # Validate language
+        valid_languages = ['en', 'hi', 'kn', 'te', 'ta', 'bn']
+        if language not in valid_languages:
+            language = 'en'
+        
+        # Use chat service
+        chat_service = get_chat_service()
+        
+        # Get AI response
+        result = chat_service.get_chat_response(
+            user_message=user_message,
+            context=context,
+            language=language
+        )
+        
+        if not result.get('success'):
+            return jsonify({
+                "error": "Failed to get response",
+                "message": result.get('response')
+            }), 500
+        
+        return jsonify({
+            "success": True,
+            "response": result['response'],
+            "language": result['language']
+        }), 200
+        
+    except Exception as e:
+        print(f"Chat error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "error": f"Chat failed: {str(e)}"
+        }), 500
+
+@app.route('/api/chat/greeting', methods=['POST'])
+def chat_greeting():
+    """Get initial greeting message based on disease detection"""
+    try:
+        data = request.json
+        context = data.get('context', {})
+        language = data.get('language', 'en')
+        
+        # Import and use chat service
+        from chat_service import get_chat_service
+        chat_service = get_chat_service()
+        
+        greeting = chat_service.get_initial_greeting(context, language)
+        
+        return jsonify({
+            "success": True,
+            "greeting": greeting,
+            "language": language
+        }), 200
+        
+    except Exception as e:
+        print(f"Greeting error: {str(e)}")
+        return jsonify({
+            "error": f"Failed to generate greeting: {str(e)}"
+        }), 500
+
 
 if __name__ == '__main__':
     # Initialize database on startup

@@ -1,11 +1,11 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { 
-  ArrowLeft, 
-  Leaf, 
-  AlertTriangle, 
-  Check, 
-  Shield, 
-  Pill, 
+import {
+  ArrowLeft,
+  Leaf,
+  AlertTriangle,
+  Check,
+  Shield,
+  Pill,
   Languages,
   Share2,
   Download,
@@ -18,6 +18,7 @@ import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { useState, useEffect } from "react";
 import { PredictionResponse } from "@/lib/api";
+import { useChatContext } from "@/contexts/ChatContext";
 
 interface DiseaseResult {
   diseaseName: string;
@@ -107,35 +108,49 @@ export const ResultPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [language, setLanguage] = useState<"en" | "local">("en");
-  
+  const { setContext } = useChatContext();
+
   const imageUrl = location.state?.imageUrl || "/placeholder.svg";
   const predictionData: PredictionResponse | undefined = location.state?.prediction;
-  
+
   // Use prediction data if available, otherwise use mock data
-  const diseaseInfo = predictionData 
+  const diseaseInfo = predictionData
     ? getDiseaseInfo(predictionData.diseaseName, predictionData.cropName)
     : getDiseaseInfo("Early Blight", "Tomato");
-  
+
   const result: DiseaseResult = predictionData
     ? {
-        diseaseName: predictionData.diseaseName,
-        confidence: predictionData.confidence,
-        cropName: predictionData.cropName,
-        severity: predictionData.severity,
-        description: predictionData.description || diseaseInfo.description,
-        treatments: diseaseInfo.treatments,
-        preventions: diseaseInfo.preventions,
-      }
+      diseaseName: predictionData.diseaseName,
+      confidence: predictionData.confidence,
+      cropName: predictionData.cropName,
+      severity: predictionData.severity,
+      description: predictionData.description || diseaseInfo.description,
+      treatments: diseaseInfo.treatments,
+      preventions: diseaseInfo.preventions,
+    }
     : {
-        diseaseName: "Early Blight",
-        confidence: 94,
-        cropName: "Tomato",
-        severity: "Medium",
-        description: diseaseInfo.description,
-        treatments: diseaseInfo.treatments,
-        preventions: diseaseInfo.preventions,
-      };
-  
+      diseaseName: "Early Blight",
+      confidence: 94,
+      cropName: "Tomato",
+      severity: "Medium",
+      description: diseaseInfo.description,
+      treatments: diseaseInfo.treatments,
+      preventions: diseaseInfo.preventions,
+    };
+
+  // Update chat context when result is loaded
+  useEffect(() => {
+    if (predictionData) {
+      setContext({
+        crop: predictionData.cropName,
+        disease: predictionData.diseaseName,
+        confidence: predictionData.confidence,
+        severity: predictionData.severity,
+        imageUrl: imageUrl,
+      });
+    }
+  }, [predictionData, imageUrl, setContext]);
+
   const SeverityIcon = severityConfig[result.severity].icon;
 
   return (
@@ -146,7 +161,7 @@ export const ResultPage = () => {
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back
         </Button>
-        
+
         <div className="flex gap-2">
           <Button
             variant="outline"
@@ -190,7 +205,7 @@ export const ResultPage = () => {
             </div>
             <CardTitle className="text-3xl">{result.cropName}</CardTitle>
           </CardHeader>
-          
+
           <CardContent className="space-y-4">
             {/* Disease Name */}
             <div>

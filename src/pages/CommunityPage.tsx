@@ -1,51 +1,25 @@
-import { motion } from "framer-motion";
 import { CommunityAlerts } from "@/components/dashboard/CommunityAlerts";
 import { useTranslation } from "react-i18next";
-
-const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-        opacity: 1,
-        transition: {
-            staggerChildren: 0.1,
-            delayChildren: 0.2
-        }
-    }
-};
-
-const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: {
-        opacity: 1,
-        y: 0,
-        transition: { duration: 0.5 }
-    }
-};
 
 export const CommunityPage = () => {
     const { t } = useTranslation();
 
     return (
-        <motion.div
-            initial="hidden"
-            animate="visible"
-            variants={containerVariants}
-            className="space-y-6"
-        >
+        <div className="space-y-6 animate-in fade-in duration-500">
             {/* Page Header */}
-            <motion.div variants={itemVariants} className="space-y-1">
+            <div className="space-y-1 animate-in slide-in-from-bottom-2 duration-500">
                 <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
                     {t("dashboard.communityAlerts.title")}
                 </h1>
                 <p className="text-muted-foreground">
                     {t("dashboard.communityAlerts.startSharing")}
                 </p>
-            </motion.div>
+            </div>
 
             {/* Community Alerts Section */}
-            <motion.div variants={itemVariants}>
+            <div className="animate-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: '200ms' }}>
                 <CommunityAlerts />
-            </motion.div>
-        </motion.div>
+            </div>
+        </div>
     );
 };

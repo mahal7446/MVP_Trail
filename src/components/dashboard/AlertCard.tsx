@@ -1,4 +1,3 @@
-import { motion } from "framer-motion";
 import { MapPin, AlertCircle, Clock } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -44,12 +43,7 @@ export const AlertCard = ({
     const { t } = useTranslation();
 
     return (
-        <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-            whileHover={{ scale: 1.02, transition: { duration: 0.2 } }}
-        >
+        <div className="hover:scale-102 transition-transform duration-300">
             <Card className="overflow-hidden border-emerald-200/50 hover:border-emerald-300 transition-all hover:shadow-md">
                 <CardContent className="p-4 bg-gradient-to-r from-emerald-50/50 to-transparent dark:from-emerald-950/20 dark:to-transparent">
                     <div className="flex gap-3">
@@ -103,6 +97,6 @@ export const AlertCard = ({
                     </div>
                 </CardContent>
             </Card>
-        </motion.div>
+        </div>
     );
 };

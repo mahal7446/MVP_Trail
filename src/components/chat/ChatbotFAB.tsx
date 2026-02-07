@@ -1,33 +1,86 @@
-import { useState } from "react";
-import { MessageCircle, X, Mic, Send, Volume2 } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { MessageCircle, X, Mic, Send, Volume2, Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
+import { useChatContext } from "@/contexts/ChatContext";
+import { useChatbot } from "@/hooks/useChatbot";
+import { useVoiceInput } from "@/hooks/useVoiceInput";
+import { useVoiceOutput } from "@/hooks/useVoiceOutput";
 
 export const ChatbotFAB = () => {
+  const { i18n } = useTranslation();
+  const { context } = useChatContext();
+
   const [isOpen, setIsOpen] = useState(false);
   const [message, setMessage] = useState("");
-  const [messages, setMessages] = useState<Array<{ text: string; isUser: boolean }>>([
-    { text: "Hello! I'm AgriDetect AI Assistant. Ask me about plant diseases in your local language! 🌱", isUser: false },
-  ]);
-  const [isListening, setIsListening] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const handleSend = () => {
+  // Chatbot hook
+  const { messages, isLoading, sendMessage, initializeChat } = useChatbot();
+
+  // Voice hooks
+  const {
+    isListening,
+    transcript,
+    startListening,
+    stopListening,
+    resetTranscript,
+    isSupported: voiceInputSupported,
+  } = useVoiceInput(i18n.language);
+
+  const { speak, isSpeaking } = useVoiceOutput(i18n.language);
+
+  // Initialize chat when opened
+  useEffect(() => {
+    if (isOpen && messages.length === 0) {
+      // Initialize with context if available, otherwise general greeting
+      initializeChat(context || undefined);
+    }
+  }, [isOpen, messages.length, context, initializeChat]);
+
+  // Update message when voice transcript changes
+  useEffect(() => {
+    if (transcript) {
+      setMessage(transcript);
+    }
+  }, [transcript]);
+
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  // Handle send message
+  const handleSend = async () => {
     if (!message.trim()) return;
-    setMessages([...messages, { text: message, isUser: true }]);
+
+    await sendMessage(message);
     setMessage("");
-    // Simulate bot response
-    setTimeout(() => {
-      setMessages(prev => [...prev, { 
-        text: "I understand you're asking about plant health. Could you please share an image of your plant, or describe the symptoms you're seeing?", 
-        isUser: false 
-      }]);
-    }, 1000);
+    resetTranscript();
   };
 
+  // Handle voice input toggle (auto-send after speaking)
   const toggleVoice = () => {
-    setIsListening(!isListening);
-    // Voice functionality would be implemented here
+    if (isListening) {
+      stopListening();
+      // Auto-send if there's transcript
+      if (transcript && transcript.trim()) {
+        setTimeout(() => {
+          handleSend();
+        }, 500);
+      }
+    } else {
+      setMessage(""); // Clear previous message
+      resetTranscript();
+      startListening();
+    }
+  };
+
+  // Handle voice output for bot messages
+  const handleSpeak = (text: string) => {
+    speak(text);
   };
 
   return (
@@ -44,7 +97,7 @@ export const ChatbotFAB = () => {
                 </div>
                 <div>
                   <h3 className="font-semibold">AgriDetect Assistant</h3>
-                  <p className="text-xs opacity-80">Ask in your local language</p>
+                  <p className="text-xs opacity-80">AI-powered agricultural advisor</p>
                 </div>
               </div>
               <Button
@@ -76,12 +129,14 @@ export const ChatbotFAB = () => {
                       : "bg-muted text-foreground rounded-bl-md"
                   )}
                 >
-                  {msg.text}
+                  <p className="whitespace-pre-wrap">{msg.text}</p>
                   {!msg.isUser && (
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="w-6 h-6 ml-2 inline-flex"
+                      className="w-6 h-6 ml-2 inline-flex hover:bg-background/20"
+                      onClick={() => handleSpeak(msg.text)}
+                      disabled={isSpeaking}
                     >
                       <Volume2 className="w-3 h-3" />
                     </Button>
@@ -89,35 +144,60 @@ export const ChatbotFAB = () => {
                 </div>
               </div>
             ))}
+
+            {isLoading && (
+              <div className="flex justify-start">
+                <div className="bg-muted text-foreground p-3 rounded-2xl rounded-bl-md flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span className="text-sm">Thinking...</span>
+                </div>
+              </div>
+            )}
+
+            <div ref={messagesEndRef} />
           </div>
 
           {/* Input */}
           <div className="p-4 border-t border-border bg-muted/30">
             <div className="flex gap-2">
-              <Button
-                variant={isListening ? "default" : "outline"}
-                size="icon"
-                onClick={toggleVoice}
-                className={cn(
-                  "shrink-0",
-                  isListening && "animate-pulse bg-destructive"
-                )}
-              >
-                <Mic className="w-4 h-4" />
-              </Button>
+              {voiceInputSupported && (
+                <Button
+                  variant={isListening ? "default" : "outline"}
+                  size="icon"
+                  onClick={toggleVoice}
+                  disabled={isLoading}
+                  className={cn(
+                    "shrink-0",
+                    isListening && "animate-pulse bg-red-500 hover:bg-red-600"
+                  )}
+                  title="Click to speak, will auto-send"
+                >
+                  <Mic className="w-4 h-4" />
+                </Button>
+              )}
               <Input
-                placeholder="Type your question..."
+                placeholder={isListening ? "Listening..." : "Ask about farming, diseases, treatment..."}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                disabled={isLoading}
                 className="flex-1"
               />
-              <Button size="icon" onClick={handleSend} className="shrink-0">
-                <Send className="w-4 h-4" />
+              <Button
+                size="icon"
+                onClick={handleSend}
+                disabled={!message.trim() || isLoading}
+                className="shrink-0"
+              >
+                {isLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4" />
+                )}
               </Button>
             </div>
             <p className="text-xs text-muted-foreground mt-2 text-center">
-              🎤 Voice input available • Supports Hindi, Tamil, Telugu & more
+              🎤 {voiceInputSupported ? "Click mic, speak, auto-sends • 🔊 Voice replies" : "Voice not supported in this browser"}
             </p>
           </div>
         </div>
@@ -134,11 +214,11 @@ export const ChatbotFAB = () => {
       >
         <div className="absolute inset-0 rounded-full bg-primary/30 animate-pulse-ring" />
         <MessageCircle className="w-6 h-6 text-primary-foreground relative z-10" />
-        
+
         {/* Tooltip */}
         {!isOpen && (
           <div className="absolute right-full mr-3 top-1/2 -translate-y-1/2 bg-card text-foreground px-3 py-2 rounded-lg shadow-lg text-sm whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-            Ask in your local language 🗣️
+            Ask AI Assistant 🤖
           </div>
         )}
       </button>

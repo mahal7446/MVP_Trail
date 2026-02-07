@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
 import { Plus, Users } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -51,11 +50,7 @@ export const CommunityAlerts = () => {
     };
 
     return (
-        <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-        >
+        <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
             <Card className="shadow-soft overflow-hidden border-emerald-200/50 bg-gradient-to-br from-emerald-50/30 to-transparent dark:from-emerald-950/20 dark:to-transparent">
                 <CardHeader className="pb-3 pt-4">
                     <div className="flex items-center justify-between">
@@ -117,6 +112,6 @@ export const CommunityAlerts = () => {
                 userFullName={user?.fullName}
                 userEmail={user?.email}
             />
-        </motion.div>
+        </div>
     );
 };
