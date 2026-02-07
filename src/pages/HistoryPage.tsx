@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { 
-  Search, 
-  Filter, 
-  Calendar, 
-  Leaf, 
+import {
+  Search,
+  Filter,
+  Calendar,
+  Leaf,
   ChevronRight,
   Trash2,
   CheckCircle,
@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useTranslation } from "react-i18next";
 
 interface HistoryItem {
   id: string;
@@ -93,12 +94,13 @@ const severityColors = {
 };
 
 export const HistoryPage = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [filterSeverity, setFilterSeverity] = useState<string>("all");
 
   const filteredHistory = mockHistory.filter((item) => {
-    const matchesSearch = 
+    const matchesSearch =
       item.cropName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.disease.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesSeverity = filterSeverity === "all" || item.severity === filterSeverity;
@@ -111,10 +113,10 @@ export const HistoryPage = () => {
       <div className="space-y-1">
         <h1 className="text-2xl sm:text-3xl font-bold text-foreground flex items-center gap-3">
           <Calendar className="w-7 h-7 text-primary" />
-          Scan History
+          {t('history.pageTitle')}
         </h1>
         <p className="text-muted-foreground">
-          View all your previous plant disease scans
+          {t('history.pageSubtitle')}
         </p>
       </div>
 
@@ -125,7 +127,7 @@ export const HistoryPage = () => {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="Search by crop or disease..."
+                placeholder={t('history.searchPlaceholder')}
                 className="pl-9"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -134,13 +136,13 @@ export const HistoryPage = () => {
             <Select value={filterSeverity} onValueChange={setFilterSeverity}>
               <SelectTrigger className="w-full sm:w-[180px]">
                 <Filter className="w-4 h-4 mr-2" />
-                <SelectValue placeholder="Filter by severity" />
+                <SelectValue placeholder={t('history.filterBySeverity')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Severities</SelectItem>
-                <SelectItem value="Low">Low</SelectItem>
-                <SelectItem value="Medium">Medium</SelectItem>
-                <SelectItem value="High">High</SelectItem>
+                <SelectItem value="all">{t('history.allSeverities')}</SelectItem>
+                <SelectItem value="Low">{t('history.low')}</SelectItem>
+                <SelectItem value="Medium">{t('history.medium')}</SelectItem>
+                <SelectItem value="High">{t('history.high')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -177,7 +179,7 @@ export const HistoryPage = () => {
                       {item.isHealthy ? (
                         <span className="flex items-center gap-1 text-success">
                           <CheckCircle className="w-4 h-4" />
-                          Healthy
+                          {t('history.healthy')}
                         </span>
                       ) : (
                         <span className="flex items-center gap-1 text-destructive">
@@ -187,14 +189,14 @@ export const HistoryPage = () => {
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {item.date} at {item.time}
+                      {item.date} {t('history.at')} {item.time}
                     </p>
                   </div>
 
                   {/* Severity & Arrow */}
                   <div className="flex items-center gap-3 shrink-0">
-                    <Badge 
-                      variant="outline" 
+                    <Badge
+                      variant="outline"
                       className={`hidden sm:flex ${severityColors[item.severity]}`}
                     >
                       {item.severity}
@@ -209,14 +211,14 @@ export const HistoryPage = () => {
           <Card className="shadow-soft">
             <CardContent className="p-12 text-center">
               <Leaf className="w-16 h-16 mx-auto mb-4 text-muted-foreground/30" />
-              <h3 className="text-lg font-semibold mb-2">No scans found</h3>
+              <h3 className="text-lg font-semibold mb-2">{t('history.noScansFound')}</h3>
               <p className="text-muted-foreground mb-4">
                 {searchQuery || filterSeverity !== "all"
-                  ? "Try adjusting your search or filter"
-                  : "Start by uploading your first plant image"}
+                  ? t('history.adjustSearch')
+                  : t('history.uploadFirst')}
               </p>
               <Button onClick={() => navigate("/upload")}>
-                Upload Plant Image
+                {t('history.uploadPlantImage')}
               </Button>
             </CardContent>
           </Card>
@@ -230,19 +232,19 @@ export const HistoryPage = () => {
             <div className="flex flex-wrap justify-center gap-6 text-center">
               <div>
                 <p className="text-2xl font-bold text-foreground">{mockHistory.length}</p>
-                <p className="text-sm text-muted-foreground">Total Scans</p>
+                <p className="text-sm text-muted-foreground">{t('history.totalScans')}</p>
               </div>
               <div>
                 <p className="text-2xl font-bold text-success">
                   {mockHistory.filter(h => h.isHealthy).length}
                 </p>
-                <p className="text-sm text-muted-foreground">Healthy Plants</p>
+                <p className="text-sm text-muted-foreground">{t('history.healthyPlants')}</p>
               </div>
               <div>
                 <p className="text-2xl font-bold text-destructive">
                   {mockHistory.filter(h => !h.isHealthy).length}
                 </p>
-                <p className="text-sm text-muted-foreground">Diseased Plants</p>
+                <p className="text-sm text-muted-foreground">{t('history.diseasedPlants')}</p>
               </div>
             </div>
           </CardContent>

@@ -1,17 +1,18 @@
-import { useState } from "react";
-import { 
-  User, 
-  Mail, 
-  Phone, 
-  MapPin, 
-  Edit2, 
+import { useState, useEffect, useRef } from "react";
+import {
+  User,
+  Mail,
+  Phone,
+  MapPin,
+  Edit2,
   Save,
   Languages,
   Bell,
   Moon,
   LogOut,
-  ChevronRight,
-  Leaf
+  Leaf,
+  Camera,
+  Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,28 +30,206 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
+import { getProfile, updateProfile, uploadProfilePicture, getProfilePictureUrl } from "@/lib/api";
+import { useTheme } from "@/contexts/ThemeContext";
+import { useTranslation } from "react-i18next";
 
 export const ProfilePage = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { theme, toggleTheme } = useTheme();
+  const { t, i18n } = useTranslation();
+
   const [isEditing, setIsEditing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingPicture, setIsUploadingPicture] = useState(false);
+
   const [profile, setProfile] = useState({
-    name: "Ramesh Kumar",
-    email: "ramesh@farmer.com",
-    phone: "+91 98765 43210",
-    location: "Punjab, India",
+    name: "",
+    email: "",
+    phone: "",
+    address: "",
     language: "en",
+    profilePictureUrl: "",
   });
 
-  const handleSave = () => {
-    setIsEditing(false);
-    toast({
-      title: "Profile updated! ✓",
-      description: "Your changes have been saved successfully",
-    });
+  // Load user data on component mount
+  useEffect(() => {
+    const loadUserProfile = async () => {
+      try {
+        // Get user from localStorage
+        const userStr = localStorage.getItem('user');
+        if (!userStr) {
+          toast({
+            title: "Not logged in",
+            description: "Please log in to view your profile",
+            variant: "destructive",
+          });
+          navigate("/login");
+          return;
+        }
+
+        const user = JSON.parse(userStr);
+
+        // Fetch full profile from backend
+        const response = await getProfile(user.email);
+
+        if (response.success && response.user) {
+          setProfile({
+            name: response.user.fullName || "",
+            email: response.user.email || "",
+            phone: response.user.phone || "",
+            address: response.user.address || "",
+            language: "en",
+            profilePictureUrl: response.user.profilePictureUrl || "",
+          });
+        } else {
+          // Use localStorage data as fallback
+          setProfile({
+            name: user.fullName || "",
+            email: user.email || "",
+            phone: user.phone || "",
+            address: user.address || "",
+            language: "en",
+            profilePictureUrl: user.profilePictureUrl || "",
+          });
+        }
+      } catch (error) {
+        console.error("Error loading profile:", error);
+        toast({
+          title: "Error loading profile",
+          description: "Could not load your profile data",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadUserProfile();
+  }, [navigate, toast]);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+
+    try {
+      const response = await updateProfile(profile.email, {
+        fullName: profile.name,
+        phone: profile.phone,
+        address: profile.address,
+        email: profile.email,
+      });
+
+      if (response.success) {
+        setIsEditing(false);
+
+        // Update localStorage
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          localStorage.setItem('user', JSON.stringify({
+            ...user,
+            fullName: profile.name,
+            phone: profile.phone,
+            address: profile.address,
+          }));
+        }
+
+        toast({
+          title: "Profile updated! ✓",
+          description: "Your changes have been saved successfully",
+        });
+      } else {
+        toast({
+          title: "Update failed",
+          description: response.error || "Failed to update profile",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Update failed",
+        description: "An error occurred while saving",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleProfilePictureClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: "Invalid file",
+        description: "Please select an image file",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate file size (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "File too large",
+        description: "Please select an image smaller than 5MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsUploadingPicture(true);
+
+    try {
+      const response = await uploadProfilePicture(profile.email, file);
+
+      if (response.success) {
+        const newProfilePictureUrl = response.profilePictureUrl || "";
+        setProfile({ ...profile, profilePictureUrl: newProfilePictureUrl });
+
+        // Update localStorage
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          localStorage.setItem('user', JSON.stringify({
+            ...user,
+            profilePictureUrl: newProfilePictureUrl,
+          }));
+        }
+
+        toast({
+          title: "Profile picture updated! ✓",
+          description: "Your profile picture has been uploaded successfully",
+        });
+      } else {
+        toast({
+          title: "Upload failed",
+          description: response.error || "Failed to upload profile picture",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Upload failed",
+        description: "An error occurred while uploading",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploadingPicture(false);
+    }
   };
 
   const handleLogout = () => {
+    localStorage.removeItem('user');
     toast({
       title: "Logged out",
       description: "See you again soon!",
@@ -58,44 +237,88 @@ export const ProfilePage = () => {
     navigate("/login");
   };
 
+  // Get initials for avatar fallback
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(part => part[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-2xl mx-auto space-y-6 animate-fade-in">
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleFileChange}
+      />
+
       {/* Profile Header */}
       <Card className="shadow-soft overflow-hidden">
         <div className="gradient-primary h-24" />
         <CardContent className="relative pb-6">
           <div className="absolute -top-12 left-6">
-            <Avatar className="w-24 h-24 border-4 border-card shadow-lg">
-              <AvatarImage src="/placeholder.svg" />
-              <AvatarFallback className="text-2xl bg-primary text-primary-foreground">
-                RK
-              </AvatarFallback>
-            </Avatar>
+            <div className="relative">
+              <Avatar className="w-24 h-24 border-4 border-card shadow-lg">
+                <AvatarImage src={getProfilePictureUrl(profile.profilePictureUrl)} />
+                <AvatarFallback className="text-2xl bg-primary text-primary-foreground">
+                  {getInitials(profile.name) || "U"}
+                </AvatarFallback>
+              </Avatar>
+              <button
+                onClick={handleProfilePictureClick}
+                disabled={isUploadingPicture}
+                className="absolute bottom-0 right-0 p-2 bg-primary text-primary-foreground rounded-full shadow-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+              >
+                {isUploadingPicture ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Camera className="w-4 h-4" />
+                )}
+              </button>
+            </div>
           </div>
           <div className="pt-14 flex items-start justify-between">
             <div>
-              <h1 className="text-2xl font-bold">{profile.name}</h1>
+              <h1 className="text-2xl font-bold">{profile.name || "User"}</h1>
               <p className="text-muted-foreground flex items-center gap-1">
                 <MapPin className="w-4 h-4" />
-                {profile.location}
+                {profile.address || "No address set"}
               </p>
             </div>
-            <Button
-              variant={isEditing ? "default" : "outline"}
-              onClick={() => isEditing ? handleSave() : setIsEditing(true)}
-            >
-              {isEditing ? (
-                <>
-                  <Save className="w-4 h-4 mr-2" />
-                  Save
-                </>
-              ) : (
-                <>
-                  <Edit2 className="w-4 h-4 mr-2" />
-                  Edit
-                </>
-              )}
-            </Button>
+            {!isEditing ? (
+              <Button onClick={() => setIsEditing(true)} variant="outline" size="sm">
+                <Edit2 className="w-4 h-4 mr-2" />
+                {t('profile.editButton')}
+              </Button>
+            ) : (
+              <Button onClick={handleSave} size="sm" disabled={isSaving}>
+                {isSaving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    {t('profile.savingButton')}
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4 mr-2" />
+                    {t('profile.saveButton')}
+                  </>
+                )}
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -105,9 +328,9 @@ export const ProfilePage = () => {
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <User className="w-5 h-5 text-primary" />
-            Personal Information
+            {t('profile.personalInfo.title')}
           </CardTitle>
-          <CardDescription>Manage your account details</CardDescription>
+          <CardDescription>{t('profile.personalInfo.description')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid sm:grid-cols-2 gap-4">
@@ -132,9 +355,9 @@ export const ProfilePage = () => {
                   id="email"
                   type="email"
                   value={profile.email}
-                  onChange={(e) => setProfile({ ...profile, email: e.target.value })}
-                  disabled={!isEditing}
-                  className="pl-9"
+                  disabled={true}
+                  className="pl-9 bg-muted"
+                  title="Email cannot be changed"
                 />
               </div>
             </div>
@@ -152,15 +375,16 @@ export const ProfilePage = () => {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="location">Location</Label>
+              <Label htmlFor="address">Address</Label>
               <div className="relative">
                 <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
-                  id="location"
-                  value={profile.location}
-                  onChange={(e) => setProfile({ ...profile, location: e.target.value })}
+                  id="address"
+                  value={profile.address}
+                  onChange={(e) => setProfile({ ...profile, address: e.target.value })}
                   disabled={!isEditing}
                   className="pl-9"
+                  placeholder="Your address"
                 />
               </div>
             </div>
@@ -173,29 +397,34 @@ export const ProfilePage = () => {
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <Languages className="w-5 h-5 text-primary" />
-            Preferences
+            {t('profile.preferences.title')}
           </CardTitle>
-          <CardDescription>Customize your experience</CardDescription>
+          <CardDescription>{t('profile.preferences.description')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Languages className="w-5 h-5 text-muted-foreground" />
               <div>
-                <p className="font-medium">Language</p>
-                <p className="text-sm text-muted-foreground">Select your preferred language</p>
+                <p className="font-medium">{t('profile.preferences.language')}</p>
+                <p className="text-sm text-muted-foreground">{t('profile.preferences.languageDesc')}</p>
               </div>
             </div>
-            <Select value={profile.language} onValueChange={(v) => setProfile({ ...profile, language: v })}>
+            <Select value={i18n.language} onValueChange={(newLang) => {
+              setProfile({ ...profile, language: newLang });
+              i18n.changeLanguage(newLang);
+              localStorage.setItem('language', newLang);
+            }}>
               <SelectTrigger className="w-[140px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="en">English</SelectItem>
                 <SelectItem value="hi">हिंदी</SelectItem>
-                <SelectItem value="ta">தமிழ்</SelectItem>
+                <SelectItem value="kn">ಕನ್ನಡ</SelectItem>
                 <SelectItem value="te">తెలుగు</SelectItem>
-                <SelectItem value="pa">ਪੰਜਾਬੀ</SelectItem>
+                <SelectItem value="ta">தமிழ்</SelectItem>
+                <SelectItem value="bn">বাংলা</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -206,8 +435,8 @@ export const ProfilePage = () => {
             <div className="flex items-center gap-3">
               <Bell className="w-5 h-5 text-muted-foreground" />
               <div>
-                <p className="font-medium">Notifications</p>
-                <p className="text-sm text-muted-foreground">Receive disease alerts</p>
+                <p className="font-medium">{t('profile.preferences.notifications')}</p>
+                <p className="text-sm text-muted-foreground">{t('profile.preferences.notificationsDesc')}</p>
               </div>
             </div>
             <Switch defaultChecked />
@@ -219,11 +448,11 @@ export const ProfilePage = () => {
             <div className="flex items-center gap-3">
               <Moon className="w-5 h-5 text-muted-foreground" />
               <div>
-                <p className="font-medium">Dark Mode</p>
-                <p className="text-sm text-muted-foreground">Toggle dark theme</p>
+                <p className="font-medium">{t('profile.preferences.darkMode')}</p>
+                <p className="text-sm text-muted-foreground">{t('profile.preferences.darkModeDesc')}</p>
               </div>
             </div>
-            <Switch />
+            <Switch checked={theme === 'dark'} onCheckedChange={toggleTheme} />
           </div>
         </CardContent>
       </Card>
@@ -252,14 +481,14 @@ export const ProfilePage = () => {
         </CardContent>
       </Card>
 
-      {/* Logout */}
+      {/* Sign Out Button */}
       <Button
-        variant="outline"
-        className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
         onClick={handleLogout}
+        variant="destructive"
+        className="w-full"
       >
         <LogOut className="w-4 h-4 mr-2" />
-        Sign Out
+        {t('profile.signOut')}
       </Button>
     </div>
   );

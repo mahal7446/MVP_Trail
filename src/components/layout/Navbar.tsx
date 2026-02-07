@@ -1,16 +1,18 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { 
-  Home, 
-  Upload, 
-  History, 
-  User, 
-  Menu, 
+import {
+  Home,
+  Upload,
+  History,
+  User,
+  Users,
+  Menu,
   X,
   Leaf
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 
 const navItems = [
   { path: "/dashboard", label: "Dashboard", icon: Home },
@@ -22,6 +24,15 @@ const navItems = [
 export const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
+  const { t } = useTranslation();
+
+  const navItems = [
+    { path: "/dashboard", labelKey: "nav.dashboard", icon: Home },
+    { path: "/upload", labelKey: "nav.upload", icon: Upload },
+    { path: "/history", labelKey: "nav.history", icon: History },
+    { path: "/community", labelKey: "nav.community", icon: Users },
+    { path: "/profile", labelKey: "nav.profile", icon: User },
+  ];
 
   return (
     <nav className="sticky top-0 z-50 w-full bg-card/95 backdrop-blur-md border-b border-border shadow-soft">
@@ -52,7 +63,7 @@ export const Navbar = () => {
                     )}
                   >
                     <Icon className="w-4 h-4" />
-                    {item.label}
+                    {t(item.labelKey)}
                   </Button>
                 </Link>
               );
@@ -78,8 +89,8 @@ export const Navbar = () => {
                 const Icon = item.icon;
                 const isActive = location.pathname === item.path;
                 return (
-                  <Link 
-                    key={item.path} 
+                  <Link
+                    key={item.path}
                     to={item.path}
                     onClick={() => setIsOpen(false)}
                   >
@@ -88,7 +99,7 @@ export const Navbar = () => {
                       className="w-full justify-start gap-3"
                     >
                       <Icon className="w-5 h-5" />
-                      {item.label}
+                      {t(item.labelKey)}
                     </Button>
                   </Link>
                 );

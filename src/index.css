@@ -135,6 +135,7 @@
 }
 
 @layer utilities {
+
   /* Gradient utilities */
   .gradient-primary {
     background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--leaf-green-light)) 100%);
@@ -164,8 +165,15 @@
 
   /* Floating animation for chatbot */
   @keyframes float {
-    0%, 100% { transform: translateY(0px); }
-    50% { transform: translateY(-8px); }
+
+    0%,
+    100% {
+      transform: translateY(0px);
+    }
+
+    50% {
+      transform: translateY(-8px);
+    }
   }
 
   .animate-float {
@@ -174,8 +182,15 @@
 
   /* Pulse ring animation */
   @keyframes pulse-ring {
-    0% { transform: scale(1); opacity: 1; }
-    100% { transform: scale(1.5); opacity: 0; }
+    0% {
+      transform: scale(1);
+      opacity: 1;
+    }
+
+    100% {
+      transform: scale(1.5);
+      opacity: 0;
+    }
   }
 
   .animate-pulse-ring {

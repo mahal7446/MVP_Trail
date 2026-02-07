@@ -9,3 +9,7 @@ ENV/
 models/*.h5
 *.h5
 .DS_Store
+
+# SQLite database files
+*.db
+*.db-journal

@@ -1,26 +1,31 @@
 import { UploadSection } from "@/components/dashboard/UploadSection";
 import { Leaf, CheckCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { useTranslation } from "react-i18next";
 
-const tips = [
-  "Use natural lighting - avoid shadows and flash",
-  "Focus on the affected area of the plant",
-  "Hold camera steady for clear images",
-  "Include both healthy and diseased parts if possible",
-  "Take photos from multiple angles if needed",
-];
+
 
 export const UploadPage = () => {
+  const { t } = useTranslation();
+
+  const tips = [
+    t('upload.tip1'),
+    t('upload.tip2'),
+    t('upload.tip3'),
+    t('upload.tip4'),
+    t('upload.tip5'),
+  ];
+
   return (
     <div className="max-w-2xl mx-auto space-y-6 animate-fade-in">
       {/* Header */}
       <div className="text-center space-y-2">
         <h1 className="text-2xl sm:text-3xl font-bold text-foreground flex items-center justify-center gap-3">
           <Leaf className="w-7 h-7 text-primary" />
-          Upload Plant Image
+          {t('upload.pageTitle')}
         </h1>
         <p className="text-muted-foreground">
-          Take a photo or upload an image of your plant to detect diseases
+          {t('upload.pageSubtitle')}
         </p>
       </div>
 
@@ -32,7 +37,7 @@ export const UploadPage = () => {
         <CardContent className="p-6">
           <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
             <Leaf className="w-5 h-5 text-primary" />
-            Tips for Best Results
+            {t('upload.tipsTitle')}
           </h3>
           <ul className="space-y-3">
             {tips.map((tip, index) => (
@@ -48,7 +53,7 @@ export const UploadPage = () => {
       {/* Supported Crops */}
       <Card className="shadow-soft">
         <CardContent className="p-6">
-          <h3 className="font-semibold text-lg mb-4">Supported Crops</h3>
+          <h3 className="font-semibold text-lg mb-4">{t('upload.supportedCrops')}</h3>
           <div className="flex flex-wrap gap-2">
             {["Tomato", "Rice", "Wheat", "Cotton", "Potato", "Corn", "Grape", "Apple", "Pepper", "Strawberry"].map((crop) => (
               <span
@@ -59,7 +64,7 @@ export const UploadPage = () => {
               </span>
             ))}
             <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-medium">
-              +20 more
+              {t('upload.moreCrops')}
             </span>
           </div>
         </CardContent>

@@ -1,7 +1,7 @@
 """
 Flask backend server for plant disease detection using ML model (.h5)
 """
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import numpy as np
 from PIL import Image
@@ -9,45 +9,59 @@ import io
 import tensorflow as tf
 from tensorflow import keras
 import os
+from werkzeug.utils import secure_filename
+from database import (
+    init_db, create_user, get_user, verify_password, 
+    save_scan, get_user_scans, update_user_profile, update_profile_picture,
+    create_alert, get_recent_alerts
+)
+from model_manager import get_model_manager
+from verification_tokens import token_manager
+from email_service import EmailService
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for React frontend
 
-# Global variable to store the loaded model
-model = None
+# Multi-model manager (loads all 4 models)
+multi_model_manager = None
 
-def load_model():
-    """Load the .h5 model file"""
-    global model
-    # Try to find the model file (supports multiple possible names)
-    models_dir = os.path.join(os.path.dirname(__file__), 'models')
-    possible_names = [
-        'efficientnet_b3_final (1).h5',  # Your actual model filename
-        'model.h5',  # Standard name
-        'efficientnet_b3_final.h5',
-    ]
-    
-    model_path = None
-    for name in possible_names:
-        path = os.path.join(models_dir, name)
-        if os.path.exists(path):
-            model_path = path
-            break
-    
-    if model_path is None:
-        raise FileNotFoundError(
-            f"Model file not found in {models_dir}. "
-            f"Please place your .h5 model file in backend/models/ "
-            f"(looking for: {', '.join(possible_names)})"
-        )
-    
+# Email service instance
+email_service = EmailService()
+
+# In-memory storage for pending email verifications
+pending_verifications = {}
+
+# In-memory users database (should be replaced with proper database)
+users_db = {}
+
+# Upload configuration
+UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads', 'profile_pictures')
+ALERT_IMAGES_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads', 'alert_images')
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
+
+# Ensure upload directories exist
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(ALERT_IMAGES_FOLDER, exist_ok=True)
+
+def allowed_file(filename):
+    """Check if file extension is allowed"""
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def init_models():
+    """Initialize multi-model manager (loads all 4 models)"""
+    global multi_model_manager
     try:
-        model = keras.models.load_model(model_path)
-        print(f"Model loaded successfully from {model_path}")
-        return model
+        models_dir = os.path.join(os.path.dirname(__file__), 'models')
+        from model_manager import MultiModelManager
+        multi_model_manager = MultiModelManager(models_dir=models_dir)
+        print("\n[OK] Multi-model system initialized\n")
+        return True
     except Exception as e:
-        print(f"Error loading model: {str(e)}")
-        raise
+        print(f"[ERROR] Failed to initialize models: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 def preprocess_image(image_file):
     """
@@ -97,64 +111,71 @@ def health_check():
     """Health check endpoint"""
     return jsonify({
         "status": "healthy",
-        "model_loaded": model is not None
+        "models_loaded": multi_model_manager is not None and len(multi_model_manager.models) > 0,
+        "num_models": len(multi_model_manager.models) if multi_model_manager else 0
     })
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    """Predict plant disease from uploaded image"""
+    """
+    Multi-model disease prediction endpoint
+    Runs all 4 models and returns best prediction
+    """
     try:
-        # Check if model is loaded
-        if model is None:
-            return jsonify({
-                "error": "Model not loaded. Please ensure model.h5 is in backend/models/"
-            }), 500
+        # Check if multi-model manager is ready
+        if multi_model_manager is None:
+            return jsonify({"error": "Models not loaded"}), 500
         
-        # Check if image file is present
+        # Get image from request
         if 'image' not in request.files:
-            return jsonify({"error": "No image file provided"}), 400
+            return jsonify({"error": "No image provided"}), 400
         
         image_file = request.files['image']
         
-        if image_file.filename == '':
-            return jsonify({"error": "No image file selected"}), 400
+        # Read and process image
+        image = Image.open(io.BytesIO(image_file.read()))
         
-        # Preprocess image
-        processed_image = preprocess_image(image_file)
+        # Ensure RGB format
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
         
-        # Make prediction
-        predictions = model.predict(processed_image, verbose=0)
-        
-        # Get class labels
-        class_labels = get_class_labels()
-        
-        # Debug: Print raw predictions (for troubleshooting)
         print(f"\n{'='*60}")
-        print(f"PREDICTION DEBUG INFO")
+        print(f"MULTI-MODEL PREDICTION - NEW REQUEST")
         print(f"{'='*60}")
-        print(f"Raw predictions: {predictions[0]}")
-        print(f"Prediction sum: {np.sum(predictions[0]):.4f}")  # Should be ~1.0 if softmax
-        print(f"\nAll class confidences:")
-        for i, label in enumerate(class_labels):
-            print(f"  [{i}] {label}: {predictions[0][i]*100:.2f}%")
+        print(f"Image size: {image.size}")
+        print(f"Image mode: {image.mode}")
+        print(f"Image hash: {hash(image.tobytes())}")  # To verify different images
         
-        # Get top prediction
-        predicted_class_idx = np.argmax(predictions[0])
-        confidence = float(predictions[0][predicted_class_idx] * 100)
-        predicted_class = class_labels[predicted_class_idx] if predicted_class_idx < len(class_labels) else f"Class {predicted_class_idx}"
+        # Run all models and get best prediction
+        result = multi_model_manager.predict_all(image)
         
-        # Get top 3 predictions with indices for debugging
-        top_indices = np.argsort(predictions[0])[-3:][::-1]
-        top_predictions = [
-            {
-                "disease": class_labels[idx] if idx < len(class_labels) else f"Class {idx}",
-                "confidence": float(predictions[0][idx] * 100),
-                "index": int(idx)  # Add index for debugging
-            }
-            for idx in top_indices
-        ]
+        print(f"\n[DEBUG] Prediction result: {result}")
         
-        print(f"Top prediction: Index {predicted_class_idx} = {predicted_class} ({confidence:.2f}%)")
+        # Check if prediction was successful
+        if not result.get('success'):
+            # Low confidence or invalid image
+            print(f"\n[WARNING] Low confidence detection")
+            print(f"All predictions: {result.get('all_predictions', [])}")
+            return jsonify({
+                "success": False,
+                "error": "Please upload a clear crop image or valid image",
+                "confidence": result.get('confidence', 0)
+            }), 400
+        
+        # Successful prediction
+        disease_name = result['disease']
+        confidence = result['confidence'] * 100  # Convert to percentage
+        model_used = result['model_used']
+        
+        print(f"\n[OK] Best Prediction:")
+        print(f"  Disease: {disease_name}")
+        print(f"  Confidence: {confidence:.2f}%")
+        print(f"  Model: {model_used}")
+        
+        # Show all model predictions for debugging
+        print(f"\nAll Model Predictions:")
+        for pred in result['all_predictions']:
+            print(f"  - {pred['model']}: {pred['disease']} ({pred['confidence']*100:.2f}%)")
         
         # Determine severity based on confidence
         if confidence >= 80:
@@ -164,32 +185,499 @@ def predict():
         else:
             severity = "Low"
         
-        # Extract crop name from predicted class (e.g., "Blackgram_Anthracnose" -> "Blackgram")
-        crop_name = predicted_class.split('_')[0] if '_' in predicted_class else "Unknown"
+        # Extract crop name from predicted class
+        crop_name = disease_name.split('_')[0] if '_' in disease_name else "Unknown"
         
         return jsonify({
             "success": True,
-            "diseaseName": predicted_class,
+            "diseaseName": disease_name,
             "confidence": round(confidence, 2),
             "cropName": crop_name,
             "severity": severity,
-            "allPredictions": top_predictions,
-            "description": f"{predicted_class} detected with {confidence:.2f}% confidence."
+            "description": f"{disease_name} detected with {confidence:.2f}% confidence."
         })
         
     except Exception as e:
-        print(f"Error during prediction: {str(e)}")
+        print(f"[ERROR] Prediction failed: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             "error": f"Prediction failed: {str(e)}"
         }), 500
 
-if __name__ == '__main__':
-    # Load model on startup
+# ============== VALIDATION FUNCTIONS ==============
+
+def validate_password(password):
+    """
+    Validate password meets security requirements:
+    - 8-12 characters length
+    - Contains uppercase letters (A-Z)
+    - Contains lowercase letters (a-z)
+    - Contains numbers (0-9)
+    - Contains special characters (!, @, #, $, %, etc.)
+    """
+    import re
+    
+    if not password:
+        return False, "Password is required"
+    
+    # Check length
+    if len(password) < 8:
+        return False, "Password must be at least 8 characters long"
+    if len(password) > 12:
+        return False, "Password must not exceed 12 characters"
+    
+    # Check for uppercase letter
+    if not re.search(r'[A-Z]', password):
+        return False, "Password must contain at least one uppercase letter (A-Z)"
+    
+    # Check for lowercase letter
+    if not re.search(r'[a-z]', password):
+        return False, "Password must contain at least one lowercase letter (a-z)"
+    
+    # Check for digit
+    if not re.search(r'[0-9]', password):
+        return False, "Password must contain at least one number (0-9)"
+    
+    # Check for special character
+    if not re.search(r'[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\;/`~]', password):
+        return False, "Password must contain at least one special character (!, @, #, $, %, etc.)"
+    
+    return True, "Password is valid"
+
+def validate_phone(phone):
+    """
+    Validate phone number:
+    - Exactly 10 digits
+    - Only numeric characters (spaces and dashes are removed)
+    """
+    import re
+    
+    if not phone:
+        return False, "Phone number is required"
+    
+    # Remove spaces, dashes, and other common separators
+    cleaned_phone = re.sub(r'[\s\-().]', '', phone)
+    
+    # Check if it contains only digits
+    if not cleaned_phone.isdigit():
+        return False, "Phone number must contain only digits"
+    
+    # Check length
+    if len(cleaned_phone) != 10:
+        return False, "Phone number must be exactly 10 digits"
+    
+    return True, cleaned_phone
+
+# ============== AUTHENTICATION ENDPOINTS ==============
+
+@app.route('/api/auth/signup', methods=['POST'])
+def signup():
+    """Handle user signup - create account in database"""
     try:
-        load_model()
+        data = request.json
+        email = data.get('email')
+        full_name = data.get('fullName')
+        phone = data.get('phone', '')
+        password = data.get('password')
+        
+        # Validate input
+        if not all([email, full_name, password, phone]):
+            return jsonify({"error": "Missing required fields"}), 400
+        
+        # Validate password
+        password_valid, password_message = validate_password(password)
+        if not password_valid:
+            return jsonify({"error": password_message}), 400
+        
+        # Validate phone number
+        phone_valid, phone_result = validate_phone(phone)
+        if not phone_valid:
+            return jsonify({"error": phone_result}), 400
+        
+        # Use cleaned phone number
+        cleaned_phone = phone_result
+        
+        # Create user in database (password will be hashed automatically)
+        success, result = create_user(email, full_name, cleaned_phone, password)
+        
+        if not success:
+            return jsonify({"error": result}), 409 if "already registered" in result else 500
+        
+        return jsonify({
+            "success": True,
+            "message": "Account created successfully! You can now log in.",
+            "user": result
+        }), 200
+        
     except Exception as e:
-        print(f"Warning: Could not load model: {str(e)}")
-        print("Server will start but predictions will fail until model is available.")
+        print(f"Signup error: {str(e)}")
+        return jsonify({"error": f"Signup failed: {str(e)}"}), 500
+
+@app.route('/api/auth/verify-email/<token>', methods=['GET'])
+def verify_email(token):
+    """Verify email using token"""
+    try:
+        # Verify token
+        success, result = token_manager.verify_token(token)
+        
+        if not success:
+            return jsonify({
+                "success": False,
+                "error": result
+            }), 400
+        
+        email = result
+        
+        # Check if user data exists in pending
+        if email not in pending_verifications:
+            return jsonify({
+                "success": False,
+                "error": "Verification data not found"
+            }), 404
+        
+        # Move user from pending to active users
+        user_data = pending_verifications.pop(email)
+        users_db[email] = {
+            'email': user_data['email'],
+            'fullName': user_data['fullName'],
+            'phone': user_data['phone'],
+            'password': user_data['password'],
+            'verified': True,
+            'created_at': str(np.datetime64('now'))
+        }
+        
+        # Send welcome email
+        email_service.send_welcome_email(email, user_data['fullName'])
+        
+        return jsonify({
+            "success": True,
+            "message": "Email verified successfully! You can now log in.",
+            "user": {
+                "email": email,
+                "fullName": user_data['fullName']
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"Verification error: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": f"Verification failed: {str(e)}"
+        }), 500
+
+@app.route('/api/auth/resend-verification', methods=['POST'])
+def resend_verification():
+    """Resend verification email"""
+    try:
+        data = request.json
+        email = data.get('email')
+        
+        if not email:
+            return jsonify({"error": "Email is required"}), 400
+        
+        # Check if user is in pending verifications
+        if email not in pending_verifications:
+            return jsonify({"error": "No pending verification for this email"}), 404
+        
+        # Generate new token
+        token = token_manager.generate_token(email)
+        pending_verifications[email]['token'] = token
+        
+        # Resend email
+        success, message = email_service.send_verification_email(
+            to_email=email,
+            verification_token=token,
+            user_name=pending_verifications[email]['fullName']
+        )
+        
+        if not success:
+            return jsonify({"error": message}), 500
+        
+        return jsonify({
+            "success": True,
+            "message": "Verification email resent successfully!"
+        }), 200
+        
+    except Exception as e:
+        print(f"Resend error: {str(e)}")
+        return jsonify({"error": f"Resend failed: {str(e)}"}), 500
+
+@app.route('/api/auth/login', methods=['POST'])
+def login():
+    """Handle user login with database"""
+    try:
+        data = request.json
+        email = data.get('email')
+        password = data.get('password')
+        
+        if not all([email, password]):
+            return jsonify({"error": "Missing email or password"}), 400
+        
+        # Get user from database
+        user = get_user(email)
+        if not user:
+            return jsonify({"error": "Invalid credentials"}), 401
+        
+        # Verify password using bcrypt
+        if not verify_password(user['password_hash'], password):
+            return jsonify({"error": "Invalid credentials"}), 401
+        
+        return jsonify({
+            "success": True,
+            "message": "Login successful",
+            "user": {
+                "email": user['email'],
+                "fullName": user['fullName'],
+                "phone": user['phone'],
+                "address": user.get('address'),
+                "profilePictureUrl": user.get('profilePictureUrl')
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"Login error: {str(e)}")
+        return jsonify({"error": f"Login failed: {str(e)}"}), 500
+
+# ============== PROFILE ENDPOINTS ==============
+
+@app.route('/api/profile/get', methods=['GET'])
+def get_profile():
+    """Get user profile by email"""
+    try:
+        email = request.args.get('email')
+        
+        if not email:
+            return jsonify({"error": "Email is required"}), 400
+        
+        user = get_user(email)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        
+        # Don't send password hash to frontend
+        user.pop('password_hash', None)
+        
+        return jsonify({
+            "success": True,
+            "user": user
+        }), 200
+        
+    except Exception as e:
+        print(f"Get profile error: {str(e)}")
+        return jsonify({"error": f"Failed to fetch profile: {str(e)}"}), 500
+
+@app.route('/api/profile/update', methods=['POST'])
+def update_profile():
+    """Update user profile information"""
+    try:
+        data = request.json
+        email = data.get('email')
+        full_name = data.get('fullName')
+        phone = data.get('phone')
+        address = data.get('address')
+        
+        if not email:
+            return jsonify({"error": "Email is required"}), 400
+        
+        # Validate phone if provided
+        if phone:
+            phone_valid, phone_result = validate_phone(phone)
+            if not phone_valid:
+                return jsonify({"error": phone_result}), 400
+            phone = phone_result  # Use cleaned phone
+        
+        # Update profile
+        success, message = update_user_profile(email, full_name, phone, address)
+        
+        if not success:
+            return jsonify({"error": message}), 500
+        
+        # Get updated user data
+        user = get_user(email)
+        if user:
+            user.pop('password_hash', None)
+        
+        return jsonify({
+            "success": True,
+            "message": message,
+            "user": user
+        }), 200
+        
+    except Exception as e:
+        print(f"Update profile error: {str(e)}")
+        return jsonify({"error": f"Failed to update profile: {str(e)}"}), 500
+
+@app.route('/api/profile/upload-picture', methods=['POST'])
+def upload_profile_picture():
+    """Upload user profile picture"""
+    try:
+        email = request.form.get('email')
+        
+        if not email:
+            return jsonify({"error": "Email is required"}), 400
+        
+        if 'file' not in request.files:
+            return jsonify({"error": "No file provided"}), 400
+        
+        file = request.files['file']
+        
+        if file.filename == '':
+            return jsonify({"error": "No file selected"}), 400
+        
+        if not allowed_file(file.filename):
+            return jsonify({"error": "Invalid file type. Allowed: png, jpg, jpeg, gif"}), 400
+        
+        # Check file size
+        file.seek(0, os.SEEK_END)
+        file_size = file.tell()
+        file.seek(0)
+        
+        if file_size > MAX_FILE_SIZE:
+            return jsonify({"error": "File too large. Maximum size is 5MB"}), 400
+        
+        # Generate secure filename
+        filename = secure_filename(file.filename)
+        # Add email prefix to avoid conflicts
+        safe_email = email.replace('@', '_').replace('.', '_')
+        unique_filename = f"{safe_email}_{filename}"
+        
+        filepath = os.path.join(UPLOAD_FOLDER, unique_filename)
+        file.save(filepath)
+        
+        # Generate URL path for the uploaded file
+        profile_picture_url = f"/uploads/profile_pictures/{unique_filename}"
+        
+        # Update database
+        success, message = update_profile_picture(email, profile_picture_url)
+        
+        if not success:
+            # Remove uploaded file if database update fails
+            os.remove(filepath)
+            return jsonify({"error": message}), 500
+        
+        return jsonify({
+            "success": True,
+            "message": "Profile picture uploaded successfully",
+            "profilePictureUrl": profile_picture_url
+        }), 200
+        
+    except Exception as e:
+        print(f"Upload picture error: {str(e)}")
+        return jsonify({"error": f"Failed to upload picture: {str(e)}"}), 500
+
+@app.route('/uploads/profile_pictures/<filename>')
+def serve_profile_picture(filename):
+    """Serve uploaded profile pictures"""
+    return send_from_directory(UPLOAD_FOLDER, filename)
+
+# ============== COMMUNITY ALERTS ENDPOINTS ==============
+
+@app.route('/api/alerts/recent', methods=['GET'])
+def get_alerts():
+    """Get recent community alerts"""
+    try:
+        limit = request.args.get('limit', 10, type=int)
+        alerts = get_recent_alerts(limit)
+        
+        return jsonify({
+            "success": True,
+            "alerts": alerts
+        }), 200
+        
+    except Exception as e:
+        print(f"Get alerts error: {str(e)}")
+        return jsonify({"error": f"Failed to fetch alerts: {str(e)}"}), 500
+
+@app.route('/api/alerts/submit', methods=['POST'])
+def submit_alert():
+    """Submit a new community alert with optional photo"""
+    try:
+        farmer_name = request.form.get('farmerName')
+        location = request.form.get('location')
+        disease_reported = request.form.get('diseaseReported')
+        description = request.form.get('description', '')
+        user_email = request.form.get('userEmail')
+        
+        # Validate required fields
+        if not all([farmer_name, location, disease_reported]):
+            return jsonify({"error": "Missing required fields: farmerName, location, diseaseReported"}), 400
+        
+        image_url = None
+        
+        # Handle optional image upload
+        if 'image' in request.files:
+            file = request.files['image']
+            
+            if file.filename != '':
+                if not allowed_file(file.filename):
+                    return jsonify({"error": "Invalid file type. Allowed: png, jpg, jpeg, gif"}), 400
+                
+                # Check file size
+                file.seek(0, os.SEEK_END)
+                file_size = file.tell()
+                file.seek(0)
+                
+                if file_size > MAX_FILE_SIZE:
+                    return jsonify({"error": "File too large. Maximum size is 5MB"}), 400
+                
+                # Generate secure filename
+                filename = secure_filename(file.filename)
+                # Add timestamp to avoid conflicts
+                import time
+                unique_filename = f"{int(time.time())}_{filename}"
+                
+                filepath = os.path.join(ALERT_IMAGES_FOLDER, unique_filename)
+                file.save(filepath)
+                
+                # Generate URL path for the uploaded file
+                image_url = f"/uploads/alert_images/{unique_filename}"
+        
+        # Create alert in database
+        success, result = create_alert(
+            farmer_name=farmer_name,
+            location=location,
+            disease_reported=disease_reported,
+            description=description,
+            image_url=image_url,
+            user_email=user_email
+        )
+        
+        if not success:
+            # Remove uploaded file if database insert fails
+            if image_url:
+                filepath = os.path.join(ALERT_IMAGES_FOLDER, unique_filename)
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+            return jsonify({"error": result}), 500
+        
+        return jsonify({
+            "success": True,
+            "message": "Alert submitted successfully",
+            "alert": result
+        }), 200
+        
+    except Exception as e:
+        print(f"Submit alert error: {str(e)}")
+        return jsonify({"error": f"Failed to submit alert: {str(e)}"}), 500
+
+@app.route('/uploads/alert_images/<filename>')
+def serve_alert_image(filename):
+    """Serve uploaded alert images"""
+    return send_from_directory(ALERT_IMAGES_FOLDER, filename)
+
+if __name__ == '__main__':
+    # Initialize database on startup
+    try:
+        init_db()
+    except Exception as e:
+        print(f"Warning: Could not initialize database: {str(e)}")
+    
+    # Load multi-model system on startup
+    try:
+        init_models()
+    except Exception as e:
+        print(f"Warning: Could not load models: {str(e)}")
+        print("Server will start but predictions will fail until models are available.")
     
     # Run Flask server
     app.run(host='0.0.0.0', port=5000, debug=True)
