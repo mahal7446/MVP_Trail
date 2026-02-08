@@ -4,7 +4,7 @@ import { Camera, Upload, Image, Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { predictDisease } from "@/lib/api";
+import { predictDisease, saveScanToHistory } from "@/lib/api";
 
 export const UploadSection = () => {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -35,22 +35,35 @@ export const UploadSection = () => {
     }
 
     setIsProcessing(true);
-    
+
     try {
       // Call ML model API
       const predictionResult = await predictDisease(file);
-      
+
       toast({
         title: "Analysis complete! 🔬",
         description: `${predictionResult.diseaseName} detected with ${predictionResult.confidence.toFixed(1)}% confidence`,
       });
-      
+
+      // Save to history if user is logged in
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        try {
+          const user = JSON.parse(userStr);
+          if (user.email) {
+            await saveScanToHistory(user.email, predictionResult, file);
+          }
+        } catch (e) {
+          console.error("Failed to save to history:", e);
+        }
+      }
+
       // Navigate to result page with both image and prediction data
-      navigate("/result", { 
-        state: { 
+      navigate("/result", {
+        state: {
           imageUrl: URL.createObjectURL(file),
           prediction: predictionResult
-        } 
+        }
       });
     } catch (error) {
       console.error("Prediction error:", error);
@@ -78,7 +91,7 @@ export const UploadSection = () => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    
+
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       handleFileSelect(e.dataTransfer.files[0]);
     }
@@ -101,7 +114,7 @@ export const UploadSection = () => {
           Take a photo or upload an image of your plant to detect diseases
         </CardDescription>
       </CardHeader>
-      
+
       <CardContent className="space-y-4">
         {/* Drop Zone */}
         <div
@@ -111,8 +124,8 @@ export const UploadSection = () => {
           onDrop={handleDrop}
           className={`
             relative p-8 rounded-xl border-2 border-dashed transition-all cursor-pointer
-            ${dragActive 
-              ? "border-primary bg-primary/5" 
+            ${dragActive
+              ? "border-primary bg-primary/5"
               : "border-border hover:border-primary/50 hover:bg-muted/30"
             }
             ${isProcessing ? "pointer-events-none opacity-50" : ""}
@@ -147,7 +160,7 @@ export const UploadSection = () => {
             <Upload className="w-5 h-5" />
             <span className="hidden sm:inline">Upload from</span> Gallery
           </Button>
-          
+
           <Button
             className="h-14 gap-3 text-base shadow-glow"
             onClick={() => cameraInputRef.current?.click()}

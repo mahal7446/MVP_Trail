@@ -55,7 +55,7 @@ export const UploadPage = () => {
         <CardContent className="p-6">
           <h3 className="font-semibold text-lg mb-4">{t('upload.supportedCrops')}</h3>
           <div className="flex flex-wrap gap-2">
-            {["Tomato", "Rice", "Wheat", "Cotton", "Potato", "Corn", "Grape", "Apple", "Pepper", "Strawberry"].map((crop) => (
+            {["Rice", "Potato", "Corn", "Blackgram", "Tomato", "Cotton", "Wheat", "Pumpkin"].map((crop) => (
               <span
                 key={crop}
                 className="px-3 py-1 bg-muted rounded-full text-sm font-medium"
@@ -63,9 +63,6 @@ export const UploadPage = () => {
                 {crop}
               </span>
             ))}
-            <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-medium">
-              {t('upload.moreCrops')}
-            </span>
           </div>
         </CardContent>
       </Card>

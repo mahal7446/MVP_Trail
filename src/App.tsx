@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { ChatProvider } from "@/contexts/ChatContext";
+import { NotificationProvider } from "@/contexts/NotificationContext";
 import "@/i18n/config"; // Initialize i18n
 
 // Landing Page
@@ -35,34 +36,36 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
       <ChatProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <Routes>
-              {/* Public Routes */}
-              <Route path="/" element={<LandingPage />} />
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/signup" element={<SignupPage />} />
-              <Route path="/verify-otp" element={<VerifyOTPPage />} />
-              <Route path="/verify-email" element={<VerifyEmailPage />} />
-              <Route path="/verify-email/:token" element={<VerifyEmailPage />} />
+        <NotificationProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <Routes>
+                {/* Public Routes */}
+                <Route path="/" element={<LandingPage />} />
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/signup" element={<SignupPage />} />
+                <Route path="/verify-otp" element={<VerifyOTPPage />} />
+                <Route path="/verify-email" element={<VerifyEmailPage />} />
+                <Route path="/verify-email/:token" element={<VerifyEmailPage />} />
 
-              {/* Protected Routes with Layout */}
-              <Route element={<Layout />}>
-                <Route path="/dashboard" element={<DashboardPage />} />
-                <Route path="/upload" element={<UploadPage />} />
-                <Route path="/result" element={<ResultPage />} />
-                <Route path="/history" element={<HistoryPage />} />
-                <Route path="/community" element={<CommunityPage />} />
-                <Route path="/profile" element={<ProfilePage />} />
-              </Route>
+                {/* Protected Routes with Layout */}
+                <Route element={<Layout />}>
+                  <Route path="/dashboard" element={<DashboardPage />} />
+                  <Route path="/upload" element={<UploadPage />} />
+                  <Route path="/result" element={<ResultPage />} />
+                  <Route path="/history" element={<HistoryPage />} />
+                  <Route path="/community" element={<CommunityPage />} />
+                  <Route path="/profile" element={<ProfilePage />} />
+                </Route>
 
-              {/* Catch All */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
-        </TooltipProvider>
+                {/* Catch All */}
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </BrowserRouter>
+          </TooltipProvider>
+        </NotificationProvider>
       </ChatProvider>
     </ThemeProvider>
   </QueryClientProvider>

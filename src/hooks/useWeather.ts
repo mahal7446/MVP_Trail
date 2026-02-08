@@ -29,8 +29,12 @@ const getRecommendation = (temp: number, humidity: number, windSpeed: number): s
     return 'Good farming conditions – monitor crops regularly for any issues';
 };
 
-export const useWeather = () => {
-    const { latitude, longitude, error: geoError, loading: geoLoading } = useGeolocation();
+interface UseWeatherOptions {
+    enabled?: boolean;
+}
+
+export const useWeather = (options: UseWeatherOptions = {}) => {
+    const { latitude, longitude, error: geoError, loading: geoLoading } = useGeolocation({ enabled: options.enabled });
     const [state, setState] = useState<WeatherState>({
         data: null,
         loading: true,

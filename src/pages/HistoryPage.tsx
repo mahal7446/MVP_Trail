@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Search,
@@ -8,7 +8,8 @@ import {
   ChevronRight,
   Trash2,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,71 +22,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useTranslation } from "react-i18next";
-
-interface HistoryItem {
-  id: string;
-  cropName: string;
-  disease: string;
-  severity: "Low" | "Medium" | "High";
-  date: string;
-  time: string;
-  imageUrl: string;
-  isHealthy: boolean;
-}
-
-const mockHistory: HistoryItem[] = [
-  {
-    id: "1",
-    cropName: "Tomato",
-    disease: "Early Blight",
-    severity: "Medium",
-    date: "Jan 28, 2026",
-    time: "10:30 AM",
-    imageUrl: "/placeholder.svg",
-    isHealthy: false,
-  },
-  {
-    id: "2",
-    cropName: "Rice",
-    disease: "Bacterial Leaf Blight",
-    severity: "High",
-    date: "Jan 27, 2026",
-    time: "2:15 PM",
-    imageUrl: "/placeholder.svg",
-    isHealthy: false,
-  },
-  {
-    id: "3",
-    cropName: "Wheat",
-    disease: "Healthy",
-    severity: "Low",
-    date: "Jan 26, 2026",
-    time: "9:00 AM",
-    imageUrl: "/placeholder.svg",
-    isHealthy: true,
-  },
-  {
-    id: "4",
-    cropName: "Cotton",
-    disease: "Leaf Curl Virus",
-    severity: "High",
-    date: "Jan 25, 2026",
-    time: "4:45 PM",
-    imageUrl: "/placeholder.svg",
-    isHealthy: false,
-  },
-  {
-    id: "5",
-    cropName: "Potato",
-    disease: "Late Blight",
-    severity: "Medium",
-    date: "Jan 24, 2026",
-    time: "11:20 AM",
-    imageUrl: "/placeholder.svg",
-    isHealthy: false,
-  },
-];
+import { useToast } from "@/hooks/use-toast";
+import { getHistory, deleteHistoryItem, getScanImageUrl, HistoryItem } from "@/lib/api";
 
 const severityColors = {
   Low: "bg-success/20 text-success border-success/30",
@@ -96,16 +45,121 @@ const severityColors = {
 export const HistoryPage = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { toast } = useToast();
+
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterSeverity, setFilterSeverity] = useState<string>("all");
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
-  const filteredHistory = mockHistory.filter((item) => {
+  // Fetch history on mount
+  useEffect(() => {
+    fetchHistory();
+  }, []);
+
+  const fetchHistory = async () => {
+    const userStr = localStorage.getItem('user');
+    if (!userStr) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const user = JSON.parse(userStr);
+      if (user.email) {
+        const response = await getHistory(user.email);
+        if (response.success) {
+          setHistory(response.history);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch history:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load scan history",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteId) return;
+
+    const userStr = localStorage.getItem('user');
+    if (!userStr) return;
+
+    setDeleting(true);
+    try {
+      const user = JSON.parse(userStr);
+      const response = await deleteHistoryItem(deleteId, user.email);
+
+      if (response.success) {
+        setHistory(prev => prev.filter(item => item.id !== deleteId));
+        toast({
+          title: "Deleted",
+          description: "Scan removed from history",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: response.error || "Failed to delete scan",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete scan",
+        variant: "destructive",
+      });
+    } finally {
+      setDeleting(false);
+      setDeleteId(null);
+    }
+  };
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return {
+      date: date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      }),
+      time: date.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      })
+    };
+  };
+
+  const isHealthy = (diseaseName: string) => {
+    return diseaseName.toLowerCase().includes('healthy');
+  };
+
+  const filteredHistory = history.filter((item) => {
     const matchesSearch =
-      item.cropName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.disease.toLowerCase().includes(searchQuery.toLowerCase());
+      item.cropName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.diseaseName.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesSeverity = filterSeverity === "all" || item.severity === filterSeverity;
     return matchesSearch && matchesSeverity;
   });
+
+  const healthyCount = history.filter(h => isHealthy(h.diseaseName)).length;
+  const diseasedCount = history.filter(h => !isHealthy(h.diseaseName)).length;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -152,61 +206,85 @@ export const HistoryPage = () => {
       {/* History List */}
       <div className="space-y-3">
         {filteredHistory.length > 0 ? (
-          filteredHistory.map((item) => (
-            <Card
-              key={item.id}
-              className="shadow-soft hover:shadow-glow transition-all cursor-pointer group"
-              onClick={() => navigate("/result", { state: { scanId: item.id } })}
-            >
-              <CardContent className="p-4">
-                <div className="flex items-center gap-4">
-                  {/* Image */}
-                  <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden bg-muted shrink-0">
-                    <img
-                      src={item.imageUrl}
-                      alt={item.cropName}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
+          filteredHistory.map((item) => {
+            const { date, time } = formatDate(item.scanDate);
+            const healthy = isHealthy(item.diseaseName);
 
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Leaf className="w-4 h-4 text-primary shrink-0" />
-                      <span className="font-semibold text-lg truncate">{item.cropName}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      {item.isHealthy ? (
-                        <span className="flex items-center gap-1 text-success">
-                          <CheckCircle className="w-4 h-4" />
-                          {t('history.healthy')}
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1 text-destructive">
-                          <AlertCircle className="w-4 h-4" />
-                          {item.disease}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {item.date} {t('history.at')} {item.time}
-                    </p>
-                  </div>
-
-                  {/* Severity & Arrow */}
-                  <div className="flex items-center gap-3 shrink-0">
-                    <Badge
-                      variant="outline"
-                      className={`hidden sm:flex ${severityColors[item.severity]}`}
+            return (
+              <Card
+                key={item.id}
+                className="shadow-soft hover:shadow-glow transition-all group"
+              >
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-4">
+                    {/* Image */}
+                    <div
+                      className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden bg-muted shrink-0 cursor-pointer"
+                      onClick={() => navigate("/result", { state: { scanId: item.id } })}
                     >
-                      {item.severity}
-                    </Badge>
-                    <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                      <img
+                        src={getScanImageUrl(item.imageUrl)}
+                        alt={item.cropName || "Scan"}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+
+                    {/* Info */}
+                    <div
+                      className="flex-1 min-w-0 cursor-pointer"
+                      onClick={() => navigate("/result", { state: { scanId: item.id } })}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <Leaf className="w-4 h-4 text-primary shrink-0" />
+                        <span className="font-semibold text-lg truncate">{item.cropName || "Unknown"}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm">
+                        {healthy ? (
+                          <span className="flex items-center gap-1 text-success">
+                            <CheckCircle className="w-4 h-4" />
+                            {t('history.healthy')}
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1 text-destructive">
+                            <AlertCircle className="w-4 h-4" />
+                            {item.diseaseName}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {date} {t('history.at')} {time}
+                      </p>
+                    </div>
+
+                    {/* Severity & Actions */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Badge
+                        variant="outline"
+                        className={`hidden sm:flex ${severityColors[item.severity] || severityColors.Medium}`}
+                      >
+                        {item.severity || "Medium"}
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-muted-foreground hover:text-destructive"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteId(item.id);
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                      <ChevronRight
+                        className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors cursor-pointer"
+                        onClick={() => navigate("/result", { state: { scanId: item.id } })}
+                      />
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))
+                </CardContent>
+              </Card>
+            );
+          })
         ) : (
           <Card className="shadow-soft">
             <CardContent className="p-12 text-center">
@@ -226,30 +304,49 @@ export const HistoryPage = () => {
       </div>
 
       {/* Summary Stats */}
-      {filteredHistory.length > 0 && (
+      {history.length > 0 && (
         <Card className="bg-muted/30">
           <CardContent className="p-4">
             <div className="flex flex-wrap justify-center gap-6 text-center">
               <div>
-                <p className="text-2xl font-bold text-foreground">{mockHistory.length}</p>
+                <p className="text-2xl font-bold text-foreground">{history.length}</p>
                 <p className="text-sm text-muted-foreground">{t('history.totalScans')}</p>
               </div>
               <div>
-                <p className="text-2xl font-bold text-success">
-                  {mockHistory.filter(h => h.isHealthy).length}
-                </p>
+                <p className="text-2xl font-bold text-success">{healthyCount}</p>
                 <p className="text-sm text-muted-foreground">{t('history.healthyPlants')}</p>
               </div>
               <div>
-                <p className="text-2xl font-bold text-destructive">
-                  {mockHistory.filter(h => !h.isHealthy).length}
-                </p>
+                <p className="text-2xl font-bold text-destructive">{diseasedCount}</p>
                 <p className="text-sm text-muted-foreground">{t('history.diseasedPlants')}</p>
               </div>
             </div>
           </CardContent>
         </Card>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Scan?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove this scan from your history. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

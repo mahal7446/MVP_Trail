@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import AuthNavbar from "@/components/landing/AuthNavbar";
+import { API_BASE_URL } from "@/lib/api";
 
 export const VerifyEmailPage = () => {
     const { token } = useParams();
@@ -26,7 +27,7 @@ export const VerifyEmailPage = () => {
         setStatus('verifying');
 
         try {
-            const response = await fetch(`http://localhost:5000/api/auth/verify-email/${verificationToken}`);
+            const response = await fetch(`${API_BASE_URL}/api/auth/verify-email/${verificationToken}`);
             const data = await response.json();
 
             if (data.success) {
@@ -77,7 +78,7 @@ export const VerifyEmailPage = () => {
         setIsResending(true);
 
         try {
-            const response = await fetch('http://localhost:5000/api/auth/resend-verification', {
+            const response = await fetch(`${API_BASE_URL}/api/auth/resend-verification`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email }),

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { MessageCircle, X, Mic, Send, Volume2, Loader2, AlertCircle } from "lucide-react";
+import { MessageCircle, X, Mic, Send, Volume2, Loader2, AlertCircle, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -11,7 +11,7 @@ import { useVoiceOutput } from "@/hooks/useVoiceOutput";
 
 export const ChatbotFAB = () => {
   const { i18n } = useTranslation();
-  const { context } = useChatContext();
+  const { context, pendingMessage, clearPendingMessage } = useChatContext();
 
   const [isOpen, setIsOpen] = useState(false);
   const [message, setMessage] = useState("");
@@ -30,7 +30,7 @@ export const ChatbotFAB = () => {
     isSupported: voiceInputSupported,
   } = useVoiceInput(i18n.language);
 
-  const { speak, isSpeaking } = useVoiceOutput(i18n.language);
+  const { speak, stop, isSpeaking } = useVoiceOutput(i18n.language);
 
   // Initialize chat when opened
   useEffect(() => {
@@ -39,6 +39,16 @@ export const ChatbotFAB = () => {
       initializeChat(context || undefined);
     }
   }, [isOpen, messages.length, context, initializeChat]);
+
+  // Handle pending message from "Learn More" button - pre-fill input instead of auto-send
+  useEffect(() => {
+    if (pendingMessage) {
+      setIsOpen(true);
+      // Pre-fill the message in input field for user to review and send
+      setMessage(pendingMessage);
+      clearPendingMessage();
+    }
+  }, [pendingMessage, clearPendingMessage]);
 
   // Update message when voice transcript changes
   useEffect(() => {
@@ -80,7 +90,11 @@ export const ChatbotFAB = () => {
 
   // Handle voice output for bot messages
   const handleSpeak = (text: string) => {
-    speak(text);
+    if (isSpeaking) {
+      stop();
+    } else {
+      speak(text);
+    }
   };
 
   return (
@@ -101,10 +115,15 @@ export const ChatbotFAB = () => {
                 </div>
               </div>
               <Button
+                type="button"
                 variant="ghost"
                 size="icon"
-                className="text-primary-foreground hover:bg-primary-foreground/20"
-                onClick={() => setIsOpen(false)}
+                className="text-primary-foreground hover:bg-primary-foreground/20 relative z-10"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsOpen(false);
+                }}
               >
                 <X className="w-5 h-5" />
               </Button>
@@ -134,11 +153,13 @@ export const ChatbotFAB = () => {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="w-6 h-6 ml-2 inline-flex hover:bg-background/20"
+                      className={cn(
+                        "w-6 h-6 ml-2 inline-flex hover:bg-background/20",
+                        isSpeaking && "text-primary animate-pulse"
+                      )}
                       onClick={() => handleSpeak(msg.text)}
-                      disabled={isSpeaking}
                     >
-                      <Volume2 className="w-3 h-3" />
+                      {isSpeaking ? <Square className="w-3 h-3 fill-current" /> : <Volume2 className="w-3 h-3" />}
                     </Button>
                   )}
                 </div>
@@ -200,7 +221,7 @@ export const ChatbotFAB = () => {
               🎤 {voiceInputSupported ? "Click mic, speak, auto-sends • 🔊 Voice replies" : "Voice not supported in this browser"}
             </p>
           </div>
-        </div>
+        </div >
       )}
 
       {/* FAB Button */}

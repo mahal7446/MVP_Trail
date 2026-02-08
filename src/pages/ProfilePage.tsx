@@ -30,9 +30,10 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
-import { getProfile, updateProfile, uploadProfilePicture, getProfilePictureUrl } from "@/lib/api";
+import { getProfile, updateProfile, uploadProfilePicture, getProfilePictureUrl, getNotificationPreference, updateNotificationPreference, getUserStats } from "@/lib/api";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useTranslation } from "react-i18next";
+import { LocationSelector } from "@/components/profile/LocationSelector";
 
 export const ProfilePage = () => {
   const { toast } = useToast();
@@ -46,6 +47,12 @@ export const ProfilePage = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingPicture, setIsUploadingPicture] = useState(false);
 
+  const [stats, setStats] = useState({
+    total: 0,
+    healthy: 0,
+    diseased: 0
+  });
+
   const [profile, setProfile] = useState({
     name: "",
     email: "",
@@ -53,6 +60,7 @@ export const ProfilePage = () => {
     address: "",
     language: "en",
     profilePictureUrl: "",
+    notificationsEnabled: true,
   });
 
   // Load user data on component mount
@@ -73,17 +81,22 @@ export const ProfilePage = () => {
 
         const user = JSON.parse(userStr);
 
-        // Fetch full profile from backend
-        const response = await getProfile(user.email);
+        // Fetch full profile, notification preference, and stats from backend
+        const [profileRes, notifRes, statsRes] = await Promise.all([
+          getProfile(user.email),
+          getNotificationPreference(user.email),
+          getUserStats(user.email)
+        ]);
 
-        if (response.success && response.user) {
+        if (profileRes.success && profileRes.user) {
           setProfile({
-            name: response.user.fullName || "",
-            email: response.user.email || "",
-            phone: response.user.phone || "",
-            address: response.user.address || "",
-            language: "en",
-            profilePictureUrl: response.user.profilePictureUrl || "",
+            name: profileRes.user.fullName || "",
+            email: profileRes.user.email || "",
+            phone: profileRes.user.phone || "",
+            address: profileRes.user.address || "",
+            language: localStorage.getItem('language') || "en",
+            profilePictureUrl: profileRes.user.profilePictureUrl || "",
+            notificationsEnabled: notifRes.success ? notifRes.enabled : true,
           });
         } else {
           // Use localStorage data as fallback
@@ -92,9 +105,14 @@ export const ProfilePage = () => {
             email: user.email || "",
             phone: user.phone || "",
             address: user.address || "",
-            language: "en",
+            language: localStorage.getItem('language') || "en",
             profilePictureUrl: user.profilePictureUrl || "",
+            notificationsEnabled: true,
           });
+        }
+
+        if (statsRes.success) {
+          setStats(statsRes.stats);
         }
       } catch (error) {
         console.error("Error loading profile:", error);
@@ -110,6 +128,27 @@ export const ProfilePage = () => {
 
     loadUserProfile();
   }, [navigate, toast]);
+
+  const handleNotificationToggle = async (enabled: boolean) => {
+    try {
+      const response = await updateNotificationPreference(profile.email, enabled);
+      if (response.success) {
+        setProfile(prev => ({ ...prev, notificationsEnabled: enabled }));
+        toast({
+          title: enabled ? "Notifications enabled" : "Notifications disabled",
+          description: enabled
+            ? "You will receive alerts from your nearby areas"
+            : "You will no longer receive community alerts",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Preference update failed",
+        description: "Could not save notification setting",
+        variant: "destructive",
+      });
+    }
+  };
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -374,19 +413,12 @@ export const ProfilePage = () => {
                 />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="address">Address</Label>
-              <div className="relative">
-                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  id="address"
-                  value={profile.address}
-                  onChange={(e) => setProfile({ ...profile, address: e.target.value })}
-                  disabled={!isEditing}
-                  className="pl-9"
-                  placeholder="Your address"
-                />
-              </div>
+            <div className="space-y-2 sm:col-span-2">
+              <LocationSelector
+                value={profile.address}
+                onChange={(newAddress) => setProfile({ ...profile, address: newAddress })}
+                disabled={!isEditing}
+              />
             </div>
           </div>
         </CardContent>
@@ -439,7 +471,10 @@ export const ProfilePage = () => {
                 <p className="text-sm text-muted-foreground">{t('profile.preferences.notificationsDesc')}</p>
               </div>
             </div>
-            <Switch defaultChecked />
+            <Switch
+              checked={profile.notificationsEnabled}
+              onCheckedChange={handleNotificationToggle}
+            />
           </div>
 
           <Separator />
@@ -466,15 +501,15 @@ export const ProfilePage = () => {
           </h3>
           <div className="grid grid-cols-3 gap-4 text-center">
             <div className="p-4 bg-card rounded-lg shadow-soft">
-              <p className="text-3xl font-bold text-primary">127</p>
+              <p className="text-3xl font-bold text-primary">{stats.total}</p>
               <p className="text-sm text-muted-foreground">Total Scans</p>
             </div>
             <div className="p-4 bg-card rounded-lg shadow-soft">
-              <p className="text-3xl font-bold text-success">94</p>
+              <p className="text-3xl font-bold text-success">{stats.healthy}</p>
               <p className="text-sm text-muted-foreground">Healthy</p>
             </div>
             <div className="p-4 bg-card rounded-lg shadow-soft">
-              <p className="text-3xl font-bold text-destructive">33</p>
+              <p className="text-3xl font-bold text-destructive">{stats.diseased}</p>
               <p className="text-sm text-muted-foreground">Diseased</p>
             </div>
           </div>

@@ -1,10 +1,12 @@
-import { useState, useRef } from "react";
-import { X, Upload } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { X, Upload, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "react-i18next";
+import { submitCommunityAlert, updateCommunityAlert, CommunityAlert, getScanImageUrl } from "@/lib/api";
+import { LocationSelector } from "@/components/profile/LocationSelector";
 
 interface AlertSubmissionFormProps {
     isOpen: boolean;
@@ -12,6 +14,7 @@ interface AlertSubmissionFormProps {
     onSubmitSuccess: () => void;
     userFullName?: string;
     userEmail?: string;
+    initialData?: CommunityAlert | null;
 }
 
 export const AlertSubmissionForm = ({
@@ -20,20 +23,49 @@ export const AlertSubmissionForm = ({
     onSubmitSuccess,
     userFullName,
     userEmail,
+    initialData,
 }: AlertSubmissionFormProps) => {
     const { t } = useTranslation();
     const { toast } = useToast();
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const isEditMode = !!initialData;
 
     const [formData, setFormData] = useState({
         farmerName: userFullName || "",
         location: "",
         diseaseReported: "",
         description: "",
+        preventionMethods: "",
     });
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Load initial data for edit mode
+    useEffect(() => {
+        if (initialData) {
+            setFormData({
+                farmerName: initialData.farmerName,
+                location: initialData.location,
+                diseaseReported: initialData.diseaseReported,
+                description: initialData.description || "",
+                preventionMethods: initialData.preventionMethods || "",
+            });
+            if (initialData.imageUrl) {
+                setImagePreview(getScanImageUrl(initialData.imageUrl));
+            }
+        } else {
+            setFormData({
+                farmerName: userFullName || "",
+                location: "",
+                diseaseReported: "",
+                description: "",
+                preventionMethods: "",
+            });
+            setImagePreview(null);
+            setImageFile(null);
+        }
+    }, [initialData, userFullName, isOpen]);
 
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -89,6 +121,8 @@ export const AlertSubmissionForm = ({
             submitFormData.append("location", formData.location);
             submitFormData.append("diseaseReported", formData.diseaseReported);
             submitFormData.append("description", formData.description);
+            submitFormData.append("preventionMethods", formData.preventionMethods);
+
             if (userEmail) {
                 submitFormData.append("userEmail", userEmail);
             }
@@ -96,31 +130,38 @@ export const AlertSubmissionForm = ({
                 submitFormData.append("image", imageFile);
             }
 
-            const response = await fetch("http://localhost:5000/api/alerts/submit", {
-                method: "POST",
-                body: submitFormData,
-            });
+            let response;
+            if (isEditMode && initialData) {
+                response = await updateCommunityAlert(initialData.id, submitFormData);
+            } else {
+                response = await submitCommunityAlert(submitFormData);
+            }
 
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.error || "Failed to submit alert");
+            if (!response.success) {
+                throw new Error(response.error || "Failed to submit alert");
             }
 
             toast({
-                title: t("dashboard.communityAlerts.alertSubmitted"),
-                description: t("dashboard.communityAlerts.alertSubmittedDesc"),
+                title: isEditMode
+                    ? t("dashboard.communityAlerts.alertUpdated")
+                    : t("dashboard.communityAlerts.alertSubmitted"),
+                description: isEditMode
+                    ? t("dashboard.communityAlerts.alertUpdatedDesc")
+                    : t("dashboard.communityAlerts.alertSubmittedDesc"),
             });
 
-            // Reset form
-            setFormData({
-                farmerName: userFullName || "",
-                location: "",
-                diseaseReported: "",
-                description: "",
-            });
-            setImageFile(null);
-            setImagePreview(null);
+            // Reset form (if not edit mode)
+            if (!isEditMode) {
+                setFormData({
+                    farmerName: userFullName || "",
+                    location: "",
+                    diseaseReported: "",
+                    description: "",
+                    preventionMethods: "",
+                });
+                setImageFile(null);
+                setImagePreview(null);
+            }
 
             onSubmitSuccess();
             onClose();
@@ -145,7 +186,9 @@ export const AlertSubmissionForm = ({
                 {/* Header */}
                 <div className="sticky top-0 bg-background border-b p-4 flex items-center justify-between z-10">
                     <h2 className="text-xl font-semibold">
-                        {t("dashboard.communityAlerts.submitAlert")}
+                        {isEditMode
+                            ? t("dashboard.communityAlerts.editAlert")
+                            : t("dashboard.communityAlerts.submitAlert")}
                     </h2>
                     <Button
                         variant="ghost"
@@ -174,18 +217,14 @@ export const AlertSubmissionForm = ({
                         />
                     </div>
 
-                    {/* Location */}
-                    <div>
-                        <label className="text-sm font-medium mb-1.5 block">
+                    {/* Location Selection */}
+                    <div className="space-y-1.5">
+                        <label className="text-sm font-medium block">
                             {t("dashboard.communityAlerts.location")} *
                         </label>
-                        <Input
+                        <LocationSelector
                             value={formData.location}
-                            onChange={(e) =>
-                                setFormData({ ...formData, location: e.target.value })
-                            }
-                            placeholder={t("dashboard.communityAlerts.location")}
-                            required
+                            onChange={(val) => setFormData({ ...formData, location: val })}
                         />
                     </div>
 
@@ -215,8 +254,30 @@ export const AlertSubmissionForm = ({
                                 setFormData({ ...formData, description: e.target.value })
                             }
                             placeholder={t("dashboard.communityAlerts.description")}
-                            rows={3}
+                            rows={2}
                         />
+                    </div>
+
+                    {/* Prevention Methods */}
+                    <div>
+                        <div className="flex items-center gap-2 mb-1.5">
+                            <label className="text-sm font-medium block">
+                                {t("dashboard.communityAlerts.preventionMethods")}
+                            </label>
+                            <Info className="w-3.5 h-3.5 text-muted-foreground" />
+                        </div>
+                        <Textarea
+                            value={formData.preventionMethods}
+                            onChange={(e) =>
+                                setFormData({ ...formData, preventionMethods: e.target.value })
+                            }
+                            placeholder={t("dashboard.communityAlerts.preventionMethodsPlaceholder")}
+                            rows={3}
+                            className="text-sm"
+                        />
+                        <p className="text-[10px] text-muted-foreground mt-1">
+                            {t("dashboard.communityAlerts.preventionHint")}
+                        </p>
                     </div>
 
                     {/* Image Upload */}
@@ -274,8 +335,10 @@ export const AlertSubmissionForm = ({
                         disabled={isSubmitting}
                     >
                         {isSubmitting
-                            ? t("dashboard.communityAlerts.submitting")
-                            : t("dashboard.communityAlerts.submit")}
+                            ? t("dashboard.communityAlerts.processing")
+                            : isEditMode
+                                ? t("dashboard.communityAlerts.update")
+                                : t("dashboard.communityAlerts.submit")}
                     </Button>
                 </form>
             </div>

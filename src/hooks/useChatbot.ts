@@ -1,8 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChatContextData } from '@/contexts/ChatContext';
-
-const API_BASE_URL = 'http://localhost:5000';
+import { API_BASE_URL } from '@/lib/api';
 
 export interface Message {
     text: string;
@@ -138,7 +137,8 @@ export const useChatbot = (): UseChatbotReturn => {
             });
 
             if (!response.ok) {
-                throw new Error('Failed to get response from server');
+                const errorText = await response.text();
+                throw new Error(`Server error: ${response.status}`);
             }
 
             const data = await response.json();

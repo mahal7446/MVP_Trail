@@ -2,8 +2,15 @@ import FloatingBubbles from './FloatingBubbles';
 import WaveDivider from './WaveDivider';
 
 export default function Hero({ onGetStarted }) {
+  const handleScroll = (id) => {
+    const element = document.getElementById(id);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   return (
-    <section className="relative min-h-screen bg-agri-gradient flex items-center pt-[72px] overflow-visible pb-20">
+    <section id="hero" className="relative min-h-screen bg-agri-gradient flex items-center pt-[72px] overflow-visible pb-20">
       <FloatingBubbles />
       <div className="container mx-auto px-6 w-full relative z-10">
         <div className="max-w-3xl">
@@ -43,7 +50,10 @@ export default function Hero({ onGetStarted }) {
             >
               Getting Started
             </button>
-            <button className="px-8 py-3 border-2 border-agri-green-light text-white font-semibold rounded-full hover:bg-agri-green-light hover:text-agri-button-dark transition-all duration-300">
+            <button
+              onClick={() => handleScroll('how-it-works')}
+              className="px-8 py-3 border-2 border-agri-green-light text-white font-semibold rounded-full hover:bg-agri-green-light hover:text-agri-button-dark transition-all duration-300"
+            >
               See How It Works
             </button>
           </div>

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useContext, useState, ReactNode, useCallback, useMemo } from 'react';
 
 /**
  * Context data structure for AI chatbot
@@ -16,6 +16,9 @@ interface ChatContextType {
     context: ChatContextData | null;
     setContext: (context: ChatContextData) => void;
     clearContext: () => void;
+    pendingMessage: string | null;
+    triggerChat: (message: string) => void;
+    clearPendingMessage: () => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -30,19 +33,38 @@ interface ChatProviderProps {
  */
 export const ChatProvider = ({ children }: ChatProviderProps) => {
     const [context, setContextState] = useState<ChatContextData | null>(null);
+    const [pendingMessage, setPendingMessage] = useState<string | null>(null);
 
-    const setContext = (newContext: ChatContextData) => {
+    const setContext = useCallback((newContext: ChatContextData) => {
         setContextState(newContext);
         console.log('[ChatContext] Context updated:', newContext);
-    };
+    }, []);
 
-    const clearContext = () => {
+    const clearContext = useCallback(() => {
         setContextState(null);
         console.log('[ChatContext] Context cleared');
-    };
+    }, []);
+
+    const triggerChat = useCallback((message: string) => {
+        setPendingMessage(message);
+        console.log('[ChatContext] Triggering chat with message:', message);
+    }, []);
+
+    const clearPendingMessage = useCallback(() => {
+        setPendingMessage(null);
+    }, []);
+
+    const value = useMemo(() => ({
+        context,
+        setContext,
+        clearContext,
+        pendingMessage,
+        triggerChat,
+        clearPendingMessage
+    }), [context, setContext, clearContext, pendingMessage, triggerChat, clearPendingMessage]);
 
     return (
-        <ChatContext.Provider value={{ context, setContext, clearContext }}>
+        <ChatContext.Provider value={value}>
             {children}
         </ChatContext.Provider>
     );

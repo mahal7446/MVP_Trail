@@ -21,9 +21,9 @@ class ChatService:
     
     def __init__(self):
         """Initialize Gemini API client"""
-        api_key = os.getenv('GEMINI_API_KEY')
+        api_key = os.getenv('GEMINI_API_KEY') or os.getenv('VITE_GEMINI_API_KEY')
         if not api_key:
-            raise ValueError("GEMINI_API_KEY not found in environment variables")
+            raise ValueError("GEMINI_API_KEY or VITE_GEMINI_API_KEY not found in environment variables")
         
         genai.configure(api_key=api_key)
         
@@ -37,7 +37,7 @@ class ChatService:
         }
         
         self.model = genai.GenerativeModel(
-            'gemini-pro',  # Use gemini-pro model
+            'gemini-flash-latest',  # Use gemini-flash-latest for reliability and speed
             generation_config=generation_config
         )
         
@@ -123,11 +123,41 @@ Respond ONLY in {language_name}. Be practical and direct."""
             # Combine system prompt and user message concisely
             full_prompt = f"{system_prompt}\n\nQ: {user_message}\n\nA:"
             
-            # Generate response with timeout consideration
-            response = self.model.generate_content(full_prompt)
+            print(f"[DEBUG] [ChatService] Sending request to Gemini...")
+            print(f"[DEBUG] [ChatService] Model: {self.model.model_name}")
+            print(f"[DEBUG] [ChatService] Prompt: {user_message[:50]}...")
             
+            # Configure safety settings to be more permissive for agricultural advice
+            safety_settings = [
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+            ]
+            
+            # Generate response with timeout consideration
+            response = self.model.generate_content(
+                full_prompt,
+                safety_settings=safety_settings
+            )
+            
+            # Check if response was blocked
+            if not response.candidates or response.candidates[0].finish_reason != 1:
+                reason = "Unknown"
+                if response.candidates:
+                    reason = response.candidates[0].finish_reason
+                print(f"[DEBUG] [ChatService] Response blocked or incomplete. Finish Reason: {reason}")
+                
+                # Check for safety ratings if blocked
+                if hasattr(response, 'prompt_feedback'):
+                    print(f"[DEBUG] [ChatService] Prompt Feedback: {response.prompt_feedback}")
+                
+                raise ValueError(f"Response blocked by safety filters (Reason: {reason})")
+
             # Extract text from response
             response_text = response.text.strip()
+            
+            print(f"[DEBUG] [ChatService] Received response from Gemini. Length: {len(response_text)}")
             
             return {
                 'success': True,

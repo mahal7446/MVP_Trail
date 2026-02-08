@@ -7,7 +7,12 @@ interface GeolocationState {
     loading: boolean;
 }
 
-export const useGeolocation = () => {
+interface UseGeolocationOptions {
+    enabled?: boolean;
+}
+
+export const useGeolocation = (options: UseGeolocationOptions = {}) => {
+    const { enabled = true } = options;
     const [state, setState] = useState<GeolocationState>({
         latitude: null,
         longitude: null,
@@ -16,6 +21,17 @@ export const useGeolocation = () => {
     });
 
     useEffect(() => {
+        // If location access is disabled, use default location immediately
+        if (!enabled) {
+            console.log('📍 Real-time location disabled, using default location: New Delhi');
+            setState({
+                latitude: 28.6139,
+                longitude: 77.2090,
+                error: null,
+                loading: false,
+            });
+            return;
+        }
         if (!navigator.geolocation) {
             console.error('❌ Geolocation not supported');
             // Use default location (New Delhi, India) as fallback
@@ -83,7 +99,7 @@ export const useGeolocation = () => {
             timeout: 10000,
             maximumAge: 300000, // Cache position for 5 minutes
         });
-    }, []);
+    }, [enabled]);
 
     return state;
 };
