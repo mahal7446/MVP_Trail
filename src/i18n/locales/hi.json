@@ -4,6 +4,7 @@
         "upload": "अपलोड करें",
         "history": "इतिहास",
         "community": "समुदाय",
+        "analytics": "एनालिटिक्स",
         "profile": "प्रोफ़ाइल"
     },
     "dashboard": {
@@ -173,6 +174,36 @@
         "updateFailed": "अपडेट विफल",
         "loggedOut": "लॉग आउट कर दिया गया",
         "seeYouSoon": "जल्द ही मिलते हैं!"
+    },
+    "analytics": {
+        "title": "स्मार्ट एनालिटिक्स",
+        "subtitle": "आपके खेत के लिए डेटा-आधारित अंतर्दृष्टि",
+        "summary": {
+            "totalScans": "कुल स्कैन",
+            "avgHealth": "औसत स्वास्थ्य स्कोर",
+            "alerts": "रोग अलर्ट",
+            "yield": "अनुमानित उपज"
+        },
+        "charts": {
+            "yieldForecast": "फसल उपज पूर्वानुमान",
+            "diseaseTrends": "रोग के रुझान (6 महीने)",
+            "healthy": "स्वस्थ",
+            "diseased": "रोगग्रस्त",
+            "yield": "उपज (%)"
+        },
+        "reports": {
+            "title": "हालिया फील्ड रिपोर्ट",
+            "scanId": "स्कैन आईडी",
+            "date": "तारीख",
+            "crop": "फसल का प्रकार",
+            "diagnosis": "रोग का निदान",
+            "risk": "जोखिम स्तर"
+        },
+        "risk": {
+            "safe": "सुरक्षित",
+            "medium": "मध्यम",
+            "high": "उच्च जोखिम"
+        }
     },
     "common": {
         "loading": "लोड हो रहा है...",

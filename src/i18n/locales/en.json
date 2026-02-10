@@ -4,6 +4,7 @@
         "upload": "Upload",
         "history": "History",
         "community": "Community",
+        "analytics": "Analytics",
         "profile": "Profile"
     },
     "dashboard": {
@@ -173,6 +174,36 @@
         "updateFailed": "Update failed",
         "loggedOut": "Logged out",
         "seeYouSoon": "See you again soon!"
+    },
+    "analytics": {
+        "title": "Smart Analytics",
+        "subtitle": "Data-driven insights for your farm",
+        "summary": {
+            "totalScans": "Total Scans",
+            "avgHealth": "Avg Health Score",
+            "alerts": "Disease Alerts",
+            "yield": "Estimated Yield"
+        },
+        "charts": {
+            "yieldForecast": "Crop Yield Forecast",
+            "diseaseTrends": "Disease Trends (6 Months)",
+            "healthy": "Healthy",
+            "diseased": "Diseased",
+            "yield": "Yield (%)"
+        },
+        "reports": {
+            "title": "Recent Field Reports",
+            "scanId": "Scan ID",
+            "date": "Date",
+            "crop": "Crop Type",
+            "diagnosis": "Diagnosis",
+            "risk": "Risk Level"
+        },
+        "risk": {
+            "safe": "Safe",
+            "medium": "Medium",
+            "high": "High Risk"
+        }
     },
     "common": {
         "loading": "Loading...",

@@ -1,43 +1,91 @@
+import { useState, useEffect } from "react";
 import { WeatherWidget } from "@/components/dashboard/WeatherWidget";
 import { UploadSection } from "@/components/dashboard/UploadSection";
 import { RecentScans } from "@/components/dashboard/RecentScans";
 import { Leaf, TrendingUp, Shield, Users, Sparkles } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useTranslation } from "react-i18next";
-
-const stats = [
-  {
-    label: "Total Scans",
-    value: "127",
-    icon: Leaf,
-    gradient: "from-emerald-400 to-teal-600",
-    shadowColor: "shadow-emerald-500/50"
-  },
-  {
-    label: "Diseases Detected",
-    value: "23",
-    icon: Shield,
-    gradient: "from-emerald-400 to-teal-600",
-    shadowColor: "shadow-emerald-500/50"
-  },
-  {
-    label: "Accuracy Rate",
-    value: "96%",
-    icon: TrendingUp,
-    gradient: "from-emerald-400 to-teal-600",
-    shadowColor: "shadow-emerald-500/50"
-  },
-  {
-    label: "Community Farmers",
-    value: "5.2K",
-    icon: Users,
-    gradient: "from-emerald-400 to-teal-600",
-    shadowColor: "shadow-emerald-500/50"
-  },
-];
+import { API_BASE_URL } from "@/lib/api";
 
 export const DashboardPage = () => {
   const { t } = useTranslation();
+  const [user, setUser] = useState<any>(null);
+  const [statsData, setStatsData] = useState({
+    totalScans: 0,
+    diseasesDetected: 0,
+    accuracyRate: 0,
+    communityFarmers: 0
+  });
+
+  useEffect(() => {
+    // Get user from localStorage
+    const savedUser = localStorage.getItem('user');
+    if (savedUser) {
+      const parsedUser = JSON.parse(savedUser);
+      setUser(parsedUser);
+      fetchRealTimeData(parsedUser.email);
+    }
+  }, []);
+
+  const fetchRealTimeData = async (email: string) => {
+    try {
+      // Fetch scan stats
+      const statsRes = await fetch(`${API_BASE_URL}/api/profile/stats?email=${email}`);
+      const statsJson = await statsRes.json();
+
+      // Fetch accuracy
+      const accuracyRes = await fetch(`${API_BASE_URL}/api/profile/accuracy?email=${email}`);
+      const accuracyJson = await accuracyRes.json();
+
+      // Fetch total users (community farmers)
+      const usersRes = await fetch(`${API_BASE_URL}/api/stats/total-users`);
+      const usersJson = await usersRes.json();
+
+      if (statsJson.success && accuracyJson.success && usersJson.success) {
+        setStatsData({
+          totalScans: statsJson.stats.total,
+          diseasesDetected: statsJson.stats.diseased,
+          accuracyRate: accuracyJson.accuracy,
+          communityFarmers: usersJson.total_users
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching dashboard data:", error);
+    }
+  };
+
+  const statCards = [
+    {
+      label: "Total Scans",
+      value: statsData.totalScans.toString(),
+      icon: Leaf,
+      gradient: "from-emerald-400 to-teal-600",
+      shadowColor: "shadow-emerald-500/50"
+    },
+    {
+      label: "Diseases Detected",
+      value: statsData.diseasesDetected.toString(),
+      icon: Shield,
+      gradient: "from-emerald-400 to-teal-600",
+      shadowColor: "shadow-emerald-500/50"
+    },
+    {
+      label: "Accuracy Rate",
+      value: "95%",
+      icon: TrendingUp,
+      gradient: "from-emerald-400 to-teal-600",
+      shadowColor: "shadow-emerald-500/50"
+    },
+    {
+      label: "Community Farmers",
+      value: statsData.communityFarmers >= 1000
+        ? `${(statsData.communityFarmers / 1000).toFixed(1)}K`
+        : statsData.communityFarmers.toString(),
+      icon: Users,
+      gradient: "from-emerald-400 to-teal-600",
+      shadowColor: "shadow-emerald-500/50"
+    },
+  ];
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -46,7 +94,7 @@ export const DashboardPage = () => {
         <h1 className="text-2xl sm:text-3xl font-bold text-foreground flex items-center gap-2">
           {t('dashboard.welcome')},{" "}
           <span className="bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent animate-gradient">
-            Farmer!
+            {user?.fullName?.split(' ')[0] || 'Farmer'}!
           </span>{" "}
           🌾
         </h1>
@@ -57,7 +105,7 @@ export const DashboardPage = () => {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-        {stats.map((stat, index) => {
+        {statCards.map((stat, index) => {
           const Icon = stat.icon;
           return (
             <div

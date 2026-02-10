@@ -1,6 +1,14 @@
 """
 Flask backend server for plant disease detection using ML model (.h5)
 """
+# Suppress TensorFlow warnings and verbose output
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Suppress TensorFlow logging
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'  # Disable oneDNN optimization messages
+
+import logging
+logging.getLogger('tensorflow').setLevel(logging.ERROR)
+
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import numpy as np
@@ -8,17 +16,17 @@ from PIL import Image
 import io
 import tensorflow as tf
 from tensorflow import keras
-import os
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
 from database import (
-    init_db, create_user, get_user, verify_password, 
+    init_db, create_user, get_user, verify_password,
     save_scan, get_user_scans, delete_scan, get_scan_by_id,
     update_user_profile, update_profile_picture,
     create_alert, get_recent_alerts, get_alerts_by_location,
     delete_alert, update_alert, get_user_notification_preference,
     update_user_notification_preference, get_new_alerts_count,
-    get_user_stats
+    get_user_stats, get_user_accuracy, get_total_users_count,
+    get_analytics_summary, get_analytics_charts, get_analytics_reports
 )
 from model_manager import get_model_manager
 from verification_tokens import token_manager
@@ -598,6 +606,28 @@ def get_stats():
         print(f"Get stats error: {str(e)}")
         return jsonify({"error": f"Failed to fetch stats: {str(e)}"}), 500
 
+@app.route('/api/profile/accuracy', methods=['GET'])
+def get_accuracy():
+    """Get user's average accuracy (average confidence across all scans)"""
+    try:
+        email = request.args.get('email')
+        if not email:
+            return jsonify({"error": "Email is required"}), 400
+
+        accuracy = get_user_accuracy(email)
+        return jsonify({
+            "success": True,
+            "accuracy": round(accuracy, 2)
+        }), 200
+    except Exception as e:
+        print(f"Get accuracy error: {str(e)}")
+        return jsonify({"error": f"Failed to fetch accuracy: {str(e)}"}), 500
+
+@app.route('/api/stats/total-users', methods=['GET'])
+def get_total_users_endpoint():
+    """Get total number of registered users"""
+    return jsonify(get_total_users_count())
+
 # ============== COMMUNITY ALERTS ENDPOINTS ==============
 
 @app.route('/api/alerts/recent', methods=['GET'])
@@ -899,7 +929,9 @@ def save_history():
             confidence=float(confidence),
             crop_name=crop_name,
             severity=severity,
-            image_url=image_url
+            image_url=image_url,
+            risk_level=request.form.get('riskLevel'),
+            health_status=request.form.get('healthStatus')
         )
         
         if not success:
@@ -982,6 +1014,67 @@ def serve_scan_image(filename):
     """Serve uploaded scan images"""
     return send_from_directory(SCAN_IMAGES_FOLDER, filename)
 
+# ============== ANALYTICS API ENDPOINTS ==============
+
+@app.route('/api/analytics/summary', methods=['GET'])
+def get_analytics_summary_endpoint():
+    """Get descriptive analytics summary for a user"""
+    try:
+        email = request.args.get('email')
+        if not email:
+            return jsonify({"error": "Email is required"}), 400
+        
+        summary = get_analytics_summary(email)
+        if summary is None:
+            return jsonify({"error": "Failed to fetch analytics summary"}), 500
+            
+        return jsonify({
+            "success": True,
+            "summary": summary
+        }), 200
+    except Exception as e:
+        print(f"Analytics summary error: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/analytics/charts', methods=['GET'])
+def get_analytics_charts_endpoint():
+    """Get predictive analytics data (charts)"""
+    try:
+        email = request.args.get('email')
+        if not email:
+            return jsonify({"error": "Email is required"}), 400
+        
+        charts = get_analytics_charts(email)
+        if charts is None:
+            return jsonify({"error": "Failed to fetch analytics charts"}), 500
+            
+        return jsonify({
+            "success": True,
+            "charts": charts
+        }), 200
+    except Exception as e:
+        print(f"Analytics charts error: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/analytics/reports', methods=['GET'])
+def get_analytics_reports_endpoint():
+    """Get prescriptive analytics (recent reports)"""
+    try:
+        email = request.args.get('email')
+        limit = request.args.get('limit', 10, type=int)
+        if not email:
+            return jsonify({"error": "Email is required"}), 400
+        
+        reports = get_analytics_reports(email, limit)
+            
+        return jsonify({
+            "success": True,
+            "reports": reports
+        }), 200
+    except Exception as e:
+        print(f"Analytics reports error: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
 # ============== CHAT API ENDPOINTS ==============
 
 @app.route('/api/chat', methods=['POST'])
@@ -997,6 +1090,11 @@ def chat():
         language = data.get('language', 'en')
         context = data.get('context', {})
         
+        print(f"\n[DEBUG] Chat request received:")
+        print(f"  Message: {user_message[:50]}..." if user_message else "  Message: None")
+        print(f"  Language: {language}")
+        print(f"  Context: {context}")
+        
         # Validate input
         if not user_message:
             return jsonify({"error": "Message is required"}), 400
@@ -1007,7 +1105,15 @@ def chat():
             language = 'en'
         
         # Use chat service
-        chat_service = get_chat_service()
+        try:
+            chat_service = get_chat_service()
+            print(f"[OK] Chat service initialized")
+        except Exception as e:
+            print(f"[ERROR] Failed to initialize chat service: {str(e)}")
+            return jsonify({
+                "error": "Chat service not available",
+                "message": "The AI service is not properly configured. Please check the GEMINI_API_KEY environment variable."
+            }), 503
         
         # Get AI response
         result = chat_service.get_chat_response(
@@ -1017,11 +1123,13 @@ def chat():
         )
         
         if not result.get('success'):
+            print(f"[WARNING] Chat service returned error: {result.get('response')}")
             return jsonify({
                 "error": "Failed to get response",
                 "message": result.get('response')
             }), 500
         
+        print(f"[OK] Chat response generated successfully")
         return jsonify({
             "success": True,
             "response": result['response'],
@@ -1029,7 +1137,7 @@ def chat():
         }), 200
         
     except Exception as e:
-        print(f"Chat error: {str(e)}")
+        print(f"[ERROR] Chat error: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({
@@ -1044,11 +1152,31 @@ def chat_greeting():
         context = data.get('context', {})
         language = data.get('language', 'en')
         
+        print(f"[DEBUG] Greeting request - Context: {context}, Language: {language}")
+        
         # Import and use chat service
-        from chat_service import get_chat_service
-        chat_service = get_chat_service()
+        try:
+            chat_service = get_chat_service()
+            print(f"[OK] Chat service initialized for greeting")
+        except Exception as e:
+            print(f"[ERROR] Failed to initialize chat service: {str(e)}")
+            # Return fallback greeting if chat service fails
+            fallback_greetings = {
+                'en': "Hello! I'm your AI agricultural advisor. How can I help you today?",
+                'hi': "नमस्ते! मैं आपका AI कृषि सलाहकार हूं। मैं आपकी कैसे मदद कर सकता हूं?",
+                'kn': "ನಮಸ್ಕಾರ! ನಾನು ನಿಮ್ಮ AI ಕೃಷಿ ಸಲಹೆಗಾರ. ನಾನು ನಿಮ್ಮಕ್ಕೆ ಹೇಗೆ ಸಹಾಯ ಮಾಡಬಹುದು?",
+                'te': "నమస్కారం! నేను మీ AI వ్యవసాయ సలహాదారుని. నేను మీకు ఎలా సహాయం చేయవచ్చు?",
+                'ta': "வணக்கம்! நான் உங்கள் AI விவசாய ஆலோசகர். நான் உங்களுக்கு எவ்வாறு உதவ முடியும்?",
+                'bn': "নমস্কার! আমি আপনার AI কৃষি পরামর্শদাতা। আমি আপনাকে কীভাবে সাহায্য করতে পারি?"
+            }
+            return jsonify({
+                "success": True,
+                "greeting": fallback_greetings.get(language, fallback_greetings['en']),
+                "language": language
+            }), 200
         
         greeting = chat_service.get_initial_greeting(context, language)
+        print(f"[OK] Greeting generated: {greeting[:50]}...")
         
         return jsonify({
             "success": True,
@@ -1057,7 +1185,7 @@ def chat_greeting():
         }), 200
         
     except Exception as e:
-        print(f"Greeting error: {str(e)}")
+        print(f"[ERROR] Greeting error: {str(e)}")
         return jsonify({
             "error": f"Failed to generate greeting: {str(e)}"
         }), 500
@@ -1067,15 +1195,21 @@ if __name__ == '__main__':
     # Initialize database on startup
     try:
         init_db()
+        print("[OK] Database initialized")
     except Exception as e:
-        print(f"Warning: Could not initialize database: {str(e)}")
+        print(f"[WARNING] Could not initialize database: {str(e)}")
     
-    # Load multi-model system on startup
+    # Load multi-model system on startup (with timeout handling)
     try:
+        print("[INFO] Starting model loading in background...")
         init_models()
     except Exception as e:
-        print(f"Warning: Could not load models: {str(e)}")
-        print("Server will start but predictions will fail until models are available.")
+        print(f"[WARNING] Could not load models: {str(e)}")
+        print("[INFO] Server will start but predictions will fail until models are available.")
+    
+    print(f"\n[OK] Flask server starting on http://0.0.0.0:5000")
+    print(f"[INFO] Chat endpoint: POST /api/chat")
+    print(f"[INFO] Chat greeting: POST /api/chat/greeting\n")
     
     # Run Flask server
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='127.0.0.1', port=5000, debug=True, use_reloader=False)

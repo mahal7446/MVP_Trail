@@ -377,3 +377,60 @@ export const updateNotificationPreference = async (email: string, enabled: boole
     return { success: false, error: 'Failed to update notification preference' };
   }
 };
+// ============== ANALYTICS API ==============
+
+export interface AnalyticsSummary {
+  totalScans: number;
+  averageHealth: number;
+  diseaseAlerts: number;
+  estimatedYield: number;
+}
+
+export interface AnalyticsCharts {
+  yieldForecast: Array<{ crop: string; yield: number }>;
+  diseaseTrends: Array<{ month: string; healthy: number; diseased: number }>;
+}
+
+export interface AnalyticsReport {
+  id: number;
+  date: string;
+  cropType: string;
+  diagnosis: string;
+  riskLevel: string;
+}
+
+/**
+ * Get analytics summary
+ */
+export const getAnalyticsSummary = async (email: string): Promise<{ success: boolean; summary: AnalyticsSummary; error?: string }> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/analytics/summary?email=${encodeURIComponent(email)}`);
+    return response.json();
+  } catch (error) {
+    return { success: false, summary: { totalScans: 0, averageHealth: 0, diseaseAlerts: 0, estimatedYield: 0 }, error: 'Failed to fetch analytics summary' };
+  }
+};
+
+/**
+ * Get analytics charts data
+ */
+export const getAnalyticsCharts = async (email: string): Promise<{ success: boolean; charts: AnalyticsCharts; error?: string }> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/analytics/charts?email=${encodeURIComponent(email)}`);
+    return response.json();
+  } catch (error) {
+    return { success: false, charts: { yieldForecast: [], diseaseTrends: [] }, error: 'Failed to fetch analytics charts' };
+  }
+};
+
+/**
+ * Get analytics reports
+ */
+export const getAnalyticsReports = async (email: string, limit: number = 10): Promise<{ success: boolean; reports: AnalyticsReport[]; error?: string }> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/analytics/reports?email=${encodeURIComponent(email)}&limit=${limit}`);
+    return response.json();
+  } catch (error) {
+    return { success: false, reports: [], error: 'Failed to fetch analytics reports' };
+  }
+};

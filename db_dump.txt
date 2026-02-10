@@ -1,0 +1,7 @@
+Total rows in scan_history: 6
+ID: 2 | Email: user2@gmail.com | Disease: Corn_Cercospora | Confidence: 100.0 | Date: 2026-02-08 06:20:32
+ID: 4 | Email: mahalingm0@gmail.com | Disease: Tomato_Septoria_Leaf_Spot | Confidence: 95.24 | Date: 2026-02-08 08:11:02
+ID: 5 | Email: mahalingm0@gmail.com | Disease: Blackgram_Yellow_Mosaic | Confidence: 100.0 | Date: 2026-02-08 08:32:32
+ID: 6 | Email: mahalingm0@gmail.com | Disease: Cotton_Leaf_Curl | Confidence: 98.69 | Date: 2026-02-08 08:38:27
+ID: 7 | Email: mahalingm0@gmail.com | Disease: Blackgram_Yellow_Mosaic | Confidence: 100.0 | Date: 2026-02-08 08:51:30
+ID: 8 | Email: mahalingm0@gmail.com | Disease: Blackgram_Yellow_Mosaic | Confidence: 99.97 | Date: 2026-02-08 10:51:09

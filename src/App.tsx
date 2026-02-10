@@ -24,6 +24,8 @@ import { ResultPage } from "./pages/ResultPage";
 import { HistoryPage } from "./pages/HistoryPage";
 import { CommunityPage } from "./pages/CommunityPage";
 import { ProfilePage } from "./pages/ProfilePage";
+import { AnalyticsPage } from "./pages/AnalyticsPage";
+
 
 // Layout
 import { Layout } from "./components/layout/Layout";
@@ -57,7 +59,9 @@ const App = () => (
                   <Route path="/result" element={<ResultPage />} />
                   <Route path="/history" element={<HistoryPage />} />
                   <Route path="/community" element={<CommunityPage />} />
+                  <Route path="/analytics" element={<AnalyticsPage />} />
                   <Route path="/profile" element={<ProfilePage />} />
+
                 </Route>
 
                 {/* Catch All */}

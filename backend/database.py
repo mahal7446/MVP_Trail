@@ -70,18 +70,32 @@ def init_db():
                 confidence REAL NOT NULL,
                 crop_name TEXT,
                 severity TEXT,
+                risk_level TEXT,
+                health_status TEXT,
                 image_url TEXT,
                 scan_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_email) REFERENCES users(email)
             )
         ''')
         
-        # Migrate existing table if needed (add image_url column)
+        # Migrate existing table if needed (add new columns)
         try:
             cursor.execute("ALTER TABLE scan_history ADD COLUMN image_url TEXT")
             print("Added image_url column to scan_history")
         except sqlite3.OperationalError:
             pass  # Column already exists
+
+        try:
+            cursor.execute("ALTER TABLE scan_history ADD COLUMN risk_level TEXT")
+            print("Added risk_level column to scan_history")
+        except sqlite3.OperationalError:
+            pass
+
+        try:
+            cursor.execute("ALTER TABLE scan_history ADD COLUMN health_status TEXT")
+            print("Added health_status column to scan_history")
+        except sqlite3.OperationalError:
+            pass
         
         # Create community alerts table
         cursor.execute('''
@@ -173,18 +187,30 @@ def get_user(email):
         print(f"Error fetching user: {str(e)}")
         return None
 
-def save_scan(user_email, disease_name, confidence, crop_name=None, severity=None, image_url=None):
+def save_scan(user_email, disease_name, confidence, crop_name=None, severity=None, image_url=None, risk_level=None, health_status=None):
     """
     Save a disease detection scan to history
     Returns: (success, scan_id_or_message)
     """
     try:
+        # Derive health_status and risk_level if not provided
+        if health_status is None:
+            health_status = 'Healthy' if 'healthy' in disease_name.lower() else 'Diseased'
+        
+        if risk_level is None:
+            if health_status == 'Healthy':
+                risk_level = 'Safe'
+            elif confidence > 85:
+                risk_level = 'High'
+            else:
+                risk_level = 'Medium'
+
         with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT INTO scan_history (user_email, disease_name, confidence, crop_name, severity, image_url)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (user_email, disease_name, confidence, crop_name, severity, image_url))
+                INSERT INTO scan_history (user_email, disease_name, confidence, crop_name, severity, image_url, risk_level, health_status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (user_email, disease_name, confidence, crop_name, severity, image_url, risk_level, health_status))
             scan_id = cursor.lastrowid
             
         return True, scan_id
@@ -199,8 +225,12 @@ def get_user_scans(user_email, limit=50):
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
+            cursor.execute("SELECT DISTINCT user_email FROM scan_history")
+            print(f"DEBUG: Emails in DB: {[r[0] for r in cursor.fetchall()]}")
+            print(f"DEBUG: Querying for email: '{user_email}'")
+            
             cursor.execute('''
-                SELECT id, disease_name, confidence, crop_name, severity, image_url, scan_date
+                SELECT id, disease_name, confidence, crop_name, severity, risk_level, health_status, image_url, scan_date
                 FROM scan_history
                 WHERE user_email = ?
                 ORDER BY scan_date DESC
@@ -214,11 +244,15 @@ def get_user_scans(user_email, limit=50):
                 'confidence': row['confidence'],
                 'cropName': row['crop_name'],
                 'severity': row['severity'],
+                'riskLevel': row['risk_level'],
+                'healthStatus': row['health_status'],
                 'imageUrl': row['image_url'],
                 'scanDate': row['scan_date']
             } for row in rows]
     except Exception as e:
-        print(f"Error fetching scans: {str(e)}")
+        import traceback
+        print(f"Error fetching scans for {user_email}: {str(e)}")
+        traceback.print_exc()
         return []
 
 def get_scan_by_id(scan_id, user_email):
@@ -655,3 +689,176 @@ def get_user_stats(user_email):
     except Exception as e:
         print(f"Error fetching user stats: {str(e)}")
         return {'total': 0, 'healthy': 0, 'diseased': 0}
+
+def get_total_users_count():
+    """Get total number of registered users"""
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT COUNT(*) FROM users')
+            return {'success': True, 'total_users': cursor.fetchone()[0]}
+    except Exception as e:
+        print(f"Error fetching total users count: {str(e)}")
+        return {'success': False, 'total_users': 0, 'error': str(e)}
+
+def get_user_accuracy(user_email):
+    """
+    Get user's average accuracy (average confidence across all scans)
+    Returns: average accuracy (0-100)
+    """
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT AVG(confidence) FROM scan_history WHERE user_email = ?', (user_email,))
+            avg_confidence = cursor.fetchone()[0]
+            
+            if avg_confidence is None:
+                return 0.0
+            
+            # Since confidence is already stored as a percentage (e.g., 98.78),
+            # we just return the average as is.
+            return avg_confidence
+    except Exception as e:
+        print(f"Error fetching user accuracy: {str(e)}")
+        return 0.0
+
+def get_analytics_summary(user_email):
+    """
+    Get descriptive analytics summary for a user
+    """
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Total Scans
+            cursor.execute('SELECT COUNT(*) FROM scan_history WHERE user_email = ?', (user_email,))
+            total_scans = cursor.fetchone()[0]
+            
+            if total_scans == 0:
+                return {
+                    'totalScans': 0,
+                    'averageHealth': 0,
+                    'diseaseAlerts': 0,
+                    'estimatedYield': 0
+                }
+            
+            # Healthy vs Diseased
+            cursor.execute('''
+                SELECT COUNT(*) FROM scan_history 
+                WHERE user_email = ? AND (health_status = 'Healthy' OR disease_name LIKE '%Healthy%')
+            ''', (user_email,))
+            healthy_count = cursor.fetchone()[0]
+            
+            avg_health = (healthy_count / total_scans) * 100
+            
+            # Disease Alerts (High Risk)
+            cursor.execute('''
+                SELECT COUNT(*) FROM scan_history 
+                WHERE user_email = ? AND risk_level = 'High'
+            ''', (user_email,))
+            high_risk_count = cursor.fetchone()[0]
+            
+            # Estimated Yield (Derive from health)
+            # Base yield is 100%, each diseased plant reduces it by some factor
+            # Let's say a diseased plant reduces yield by 30% on average
+            estimated_yield = max(0, 100 - ((total_scans - healthy_count) / total_scans * 30))
+            
+            return {
+                'totalScans': total_scans,
+                'averageHealth': round(avg_health, 1),
+                'diseaseAlerts': high_risk_count,
+                'estimatedYield': round(estimated_yield, 1)
+            }
+    except Exception as e:
+        print(f"Error fetching analytics summary: {str(e)}")
+        return None
+
+def get_analytics_charts(user_email):
+    """
+    Get predictive analytics data (charts)
+    """
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # 1. Crop Yield Forecast (Bar Chart)
+            # Group by crop type and calculate health score as a proxy for yield
+            cursor.execute('''
+                SELECT crop_name, 
+                       AVG(CASE WHEN health_status = 'Healthy' THEN 100 ELSE 60 END) as yield_score
+                FROM scan_history
+                WHERE user_email = ? AND crop_name IS NOT NULL
+                GROUP BY crop_name
+            ''', (user_email,))
+            yield_data = [{'crop': row['crop_name'], 'yield': round(row['yield_score'], 1)} for row in cursor.fetchall()]
+            
+            # 2. Disease Trends (Line Chart - 6 Months)
+            # Logic: Group by month
+            cursor.execute('''
+                SELECT strftime('%Y-%m', scan_date) as month,
+                       SUM(CASE WHEN health_status = 'Healthy' THEN 1 ELSE 0 END) as healthy,
+                       SUM(CASE WHEN health_status = 'Diseased' THEN 1 ELSE 0 END) as diseased
+                FROM scan_history
+                WHERE user_email = ?
+                GROUP BY month
+                ORDER BY month DESC
+                LIMIT 6
+            ''', (user_email,))
+            
+            trend_rows = cursor.fetchall()
+            # Reverse to show chronological order
+            trends = [{'month': row['month'], 'healthy': row['healthy'], 'diseased': row['diseased']} for row in trend_rows][::-1]
+            
+            # If no data, return some default structure
+            if not yield_data:
+                yield_data = [
+                    {'crop': 'Rice', 'yield': 85},
+                    {'crop': 'Wheat', 'yield': 92},
+                    {'crop': 'Potato', 'yield': 78},
+                    {'crop': 'Tomato', 'yield': 88}
+                ]
+            
+            if not trends:
+                # Mock some historical data if empty
+                trends = [
+                    {'month': '2025-09', 'healthy': 5, 'diseased': 2},
+                    {'month': '2025-10', 'healthy': 7, 'diseased': 3},
+                    {'month': '2025-11', 'healthy': 10, 'diseased': 1},
+                    {'month': '2025-12', 'healthy': 8, 'diseased': 4},
+                    {'month': '2026-01', 'healthy': 12, 'diseased': 2},
+                    {'month': '2026-02', 'healthy': 6, 'diseased': 1}
+                ]
+            
+            return {
+                'yieldForecast': yield_data,
+                'diseaseTrends': trends
+            }
+    except Exception as e:
+        print(f"Error fetching analytics charts: {str(e)}")
+        return None
+
+def get_analytics_reports(user_email, limit=10):
+    """
+    Get prescriptive analytics (recent reports)
+    """
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT id, scan_date, crop_name, disease_name, risk_level
+                FROM scan_history
+                WHERE user_email = ?
+                ORDER BY scan_date DESC
+                LIMIT ?
+            ''', (user_email, limit))
+            
+            return [{
+                'id': row['id'],
+                'date': row['scan_date'],
+                'cropType': row['crop_name'] or 'Unknown',
+                'diagnosis': row['disease_name'],
+                'riskLevel': row['risk_level'] or 'Medium'
+            } for row in cursor.fetchall()]
+    except Exception as e:
+        print(f"Error fetching analytics reports: {str(e)}")
+        return []

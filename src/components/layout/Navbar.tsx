@@ -8,7 +8,8 @@ import {
   Users,
   Menu,
   X,
-  Leaf
+  Leaf,
+  BarChart3
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -31,6 +32,7 @@ export const Navbar = () => {
     { path: "/upload", labelKey: "nav.upload", icon: Upload },
     { path: "/history", labelKey: "nav.history", icon: History },
     { path: "/community", labelKey: "nav.community", icon: Users },
+    { path: "/analytics", labelKey: "nav.analytics", icon: BarChart3 },
     { path: "/profile", labelKey: "nav.profile", icon: User },
   ];
 
